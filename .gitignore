@@ -1,18 +1,21 @@
 # Variables de entorno y archivos sensibles
-.env
-.env.local
-.env.*.local
-*.env
+# NOTA: Se han removido las exclusiones a solicitud del usuario
+# .env
+# .env.local
+# .env.*.local
+# *.env
 
 # Firebase credentials
-**/config/firebase-key.json
-**/firebase-key.json
-google-services.json
-GoogleService-Info.plist
+# NOTA: Se incluirán en el repositorio
+# **/config/firebase-key.json
+# **/firebase-key.json
+# google-services.json
+# GoogleService-Info.plist
 
 # Node modules
-node_modules/
-**/node_modules/
+# NOTA: Se incluirán en el repositorio (puede hacer el repositorio muy pesado)
+# node_modules/
+# **/node_modules/
 
 # Logs
 logs/
@@ -22,10 +25,11 @@ yarn-debug.log*
 yarn-error.log*
 
 # Base de datos SQLite local
-*.sqlite
-*.sqlite3
-*.db
-**/backups/*.sqlite
+# NOTA: Se incluirán en el repositorio
+# *.sqlite
+# *.sqlite3
+# *.db
+# **/backups/*.sqlite
 
 # Build outputs
 dist/
@@ -59,4 +63,3 @@ coverage/
 *.pid.lock
 tmp/
 pids/
-

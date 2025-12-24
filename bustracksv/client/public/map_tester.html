@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Buscar rutas de bus - Cliente</title>
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="" crossorigin=""/>
+
+<style>
+  :root{ --sidebar-w:360px; --bg:#0b0f14; --card:#0f1720; --accent:#2b7ce9; --muted:#94a3b8;}
+  body{ margin:0; font-family:Inter, system-ui, Arial; background:linear-gradient(180deg,#081222,#06111a); color:#e6eef8; height:100vh;}
+  .container{ display:flex; height:100vh; gap:20px; padding:20px; box-sizing:border-box; }
+  .sidebar{ width:var(--sidebar-w); background:rgba(16,22,30,0.7); border-radius:12px; padding:18px; box-shadow:0 6px 18px rgba(0,0,0,0.5);}
+  h2{ margin:0 0 12px 0; font-size:18px; color:#ffd166;}
+  label{ font-size:13px; color:var(--muted); display:block; margin-top:10px;}
+  input[type="text"]{ width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.05); background:rgba(255,255,255,0.02); color:#eef; }
+  .btn-row{ display:flex; gap:8px; margin-top:12px;}
+  .btn{ padding:10px; border-radius:8px; cursor:pointer; border:none; font-weight:600; }
+  .btn.primary{ background:#2b7ce9; color:white; flex:1; }
+  .btn.ghost{ background:transparent; border:1px solid rgba(255,255,255,0.06); color:var(--muted); }
+  .map-wrap{ flex:1; border-radius:12px; overflow:hidden; box-shadow:0 8px 30px rgba(2,6,23,0.7); background:white; }
+  #map{ height:100%; min-height:600px; }
+  .routes-list{ margin-top:12px; max-height:220px; overflow:auto; }
+  .route-item{ padding:10px; border-radius:8px; background:rgba(255,255,255,0.02); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;}
+  .route-item.active{ outline:2px solid rgba(43,124,233,0.25); background:rgba(43,124,233,0.06); }
+  .msg{ margin-top:12px; padding:10px; border-radius:8px; background:#2a2a2a; color:#ffc; font-size:13px;}
+  .summary{ margin-top:10px; font-size:13px; color:var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="sidebar">
+    <h2>Buscar rutas de bus</h2>
+
+    <label for="origen">Origen</label>
+    <input id="origen" type="text" placeholder="Dirección o lat,lng" />
+
+    <div style="display:flex; gap:8px; margin-top:8px;">
+      <button id="btnMiUbic" class="btn ghost">Mi ubicación</button>
+      <button id="btnUbic" class="btn ghost">Ubicación</button>
+    </div>
+
+    <label for="destino">Destino</label>
+    <input id="destino" type="text" placeholder="Dirección o lat,lng" />
+
+    <div class="btn-row">
+      <button id="btnBuscar" class="btn primary">Buscar Rutas</button>
+      <button id="btnLimpiar" class="btn ghost">Limpiar</button>
+    </div>
+
+    <div id="message" class="msg" style="display:none;"></div>
+
+    <div class="routes-list" id="routesList"></div>
+
+    <div class="summary" id="summaryBox" style="display:none;"></div>
+  </div>
+
+  <div class="map-wrap">
+    <div id="map"></div>
+  </div>
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+/* ---------- CONFIG ---------- */
+const BACKEND_BUSCAR = 'http://localhost:3000/buscar-rutas'; // Ajustado a puerto 3000
+const OSRM_ROUTE_SERVER = null; // Fallback to straight line unless OSRM is local
+const WALK_SPEED_M_S = 1.25; // 4.5 km/h ~ 1.25 m/s
+const MAX_RESULTS = 5;
+
+/* ---------- UTILIDADES ---------- */
+function parseLatLng(text){
+  // acepta "lat,lng" o dirección (se espera que backend haga geocoding si es dirección)
+  if(!text) return null;
+  const parts = text.split(',').map(s=>s.trim());
+  if(parts.length===2 && !isNaN(parts[0]) && !isNaN(parts[1])){
+    return { lat: parseFloat(parts[0]), lng: parseFloat(parts[1]) };
+  }
+  return null;
+}
+function msToMin(m) { return Math.round((m / WALK_SPEED_M_S) / 60); }
+
+/* ---------- MAP ---------- */
+const map = L.map('map', { zoomControl:true }).setView([13.693, -89.218], 15);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+const layers = {
+  walking: L.layerGroup().addTo(map),
+  buses: L.layerGroup().addTo(map),
+  markers: L.layerGroup().addTo(map)
+};
+
+function clearMap(){
+  layers.walking.clearLayers();
+  layers.buses.clearLayers();
+  layers.markers.clearLayers();
+  document.getElementById('routesList').innerHTML = '';
+  document.getElementById('summaryBox').style.display='none';
+}
+
+/* ---------- UI HOOKS ---------- */
+const origenInput = document.getElementById('origen');
+const destinoInput = document.getElementById('destino');
+const btnMiUbic = document.getElementById('btnMiUbic');
+const btnBuscar = document.getElementById('btnBuscar');
+const btnLimpiar = document.getElementById('btnLimpiar');
+const messageEl = document.getElementById('message');
+const routesListEl = document.getElementById('routesList');
+const summaryBox = document.getElementById('summaryBox');
+
+btnMiUbic.addEventListener('click', ()=> {
+  if (!navigator.geolocation) {
+    showMessage('Geolocalización no disponible en este navegador.');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(pos => {
+    const lat = pos.coords.latitude, lng = pos.coords.longitude;
+    origenInput.value = lat.toFixed(6)+','+lng.toFixed(6);
+    showMessage('Ubicación fijada como origen.');
+  }, err => showMessage('Error al obtener ubicación: ' + err.message));
+});
+
+btnLimpiar.addEventListener('click', ()=> {
+  origenInput.value='';
+  destinoInput.value='';
+  clearMap();
+  hideMessage();
+});
+
+btnBuscar.addEventListener('click', buscarRutas);
+
+/* ---------- Mensajes ---------- */
+function showMessage(txt, type='info'){
+  messageEl.style.display='block';
+  messageEl.innerText = txt;
+}
+function hideMessage(){ messageEl.style.display='none'; }
+
+/* ---------- LLAMADA AL BACKEND ---------- */
+async function buscarRutas(){
+  hideMessage();
+  clearMap();
+
+  let origen = parseLatLng(origenInput.value);
+  let destino = parseLatLng(destinoInput.value);
+
+  // si texto no es latlng, enviar como string al backend (espera que backend haga geocoding)
+  const payload = {
+    origen: origen ? origen : { input: origenInput.value },
+    destino: destino ? destino : { input: destinoInput.value }
+  };
+
+  showMessage('Buscando rutas...');
+  try {
+    const res = await fetch(BACKEND_BUSCAR, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok) throw new Error('Error en backend: ' + res.status);
+    const data = await res.json();
+    renderResults(data, origen, destino);
+  } catch (err) {
+    showMessage('Error: ' + err.message);
+    console.error(err);
+  }
+}
+
+/* ---------- RENDER RESULTADOS ---------- */
+function renderResults(data, origenOverride, destinoOverride){
+  if(!data || !Array.isArray(data.rutas) || data.rutas.length===0){
+    showMessage('No se encontraron rutas disponibles. Intenta con otras ubicaciones.');
+    return;
+  }
+  hideMessage();
+  const rutas = data.rutas.slice(0, MAX_RESULTS);
+  rutas.forEach((ruta, idx) => {
+    const item = document.createElement('div');
+    item.className='route-item';
+    item.innerHTML = `
+      <div>
+        <div style="font-weight:700">${ruta.numero} — ${ruta.nombre}</div>
+        <div style="font-size:12px;color:var(--muted)">Caminar: ${ruta.distancia_caminata_total_m ?? ( (ruta.boarding?.distancia_origen ?? 0) + (ruta.alight?.distancia_destino ?? 0) )} m</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-weight:700">${Math.round((ruta.distancia_bus_m||0)/1000*10)/10} km bus</div>
+        <div style="font-size:12px;color:var(--muted)">${msToMin((ruta.distancia_caminata_total_m || ((ruta.boarding?.distancia_origen||0)+(ruta.alight?.distancia_destino||0))))} min caminata</div>
+      </div>`;
+    item.addEventListener('click', ()=> selectRoute(idx));
+    routesListEl.appendChild(item);
+    // preparar y dibujar (no seleccionado inicialmente)
+    ruta._ui = { itemElement: item, index: idx };
+    drawRouteOnMap(ruta, false, origenOverride, destinoOverride);
+  });
+
+  // seleccionar la primera por defecto
+  selectRoute(0);
+  summaryBox.style.display='block';
+  summaryBox.innerText = `Se muestran ${Math.min(rutas.length, MAX_RESULTS)} rutas. Haz clic en una para ver detalles.`;
+}
+
+/* ---------- SELECCIONAR RUTA ---------- */
+let currentSelected = null;
+function selectRoute(i){
+  const rutas = Array.from(document.getElementById('routesList').children);
+  rutas.forEach((el, idx) => el.classList.toggle('active', idx === i));
+  // actualizar estilos: destacar polilíneas
+  
+  // reset opacity
+  layers.buses.eachLayer(l => l.setStyle && l.setStyle({ opacity: 0.5, weight: 4 }));
+  layers.walking.eachLayer(l => l.setStyle && l.setStyle({ opacity: 0.35, dashArray: '6 8' }));
+
+  // Find the layer group for selected route: we store routeId in layer.options.routeId
+  let selectedBounds = L.latLngBounds([]);
+  let foundAny=false;
+  layers.buses.eachLayer(l => {
+    if(l.options && l.options.routeIndex === i){
+      l.setStyle && l.setStyle({ opacity: 1, weight:6 });
+      selectedBounds.extend(l.getBounds());
+      foundAny=true;
+    }
+  });
+  layers.walking.eachLayer(l => {
+    if(l.options && l.options.routeIndex === i){
+      l.setStyle && l.setStyle({ opacity: 1, dashArray:'10 8', weight:4 });
+      selectedBounds.extend(l.getBounds());
+      foundAny=true;
+    }
+  });
+  layers.markers.eachLayer(m => {
+    if(m.options && m.options.routeIndex === i) {
+      selectedBounds.extend(m.getLatLng());
+      // open popup of boarding by default
+    }
+  });
+  if(foundAny){
+    map.fitBounds(selectedBounds.pad(0.25), { maxZoom: 17 });
+  }
+}
+
+/* ---------- DIBUJAR RUTA ---------- */
+async function drawRouteOnMap(ruta, selected=false, origenOverride, destinoOverride){
+  // boarding y alight obligatorios
+  const boarding = ruta.boarding;
+  const alight = ruta.alight;
+  if(!boarding || !alight) return;
+
+  // 1) marcador origen/destino solo una vez (si vienen coordenadas de inputs)
+  if(origenOverride) {
+    L.circleMarker([origenOverride.lat, origenOverride.lng], { radius:6, color:'#2b7ce9', fill:true, fillOpacity:0.9 }).addTo(layers.markers);
+  }
+  if(destinoOverride) {
+    L.circleMarker([destinoOverride.lat, destinoOverride.lng], { radius:6, color:'#ff5b5b', fill:true, fillOpacity:0.9 }).addTo(layers.markers);
+  }
+
+  // 2) polyline del segmento de bus
+  let busPoints = ruta.slice_points; // si el backend incluyó ya la subsecuencia
+  if(!busPoints && ruta.puntos) {
+    // tomar por orden
+    const inicio = boarding.orden, fin = alight.orden;
+    busPoints = ruta.puntos.filter(p => p.orden >= inicio && p.orden <= fin).map(p=>[p.lat,p.lng]);
+  } else if(busPoints) {
+    busPoints = busPoints.map(p => [p.lat, p.lng]);
+  }
+
+  if(busPoints && busPoints.length>1){
+    const poly = L.polyline(busPoints, { color:'#2b7ce9', weight: selected ? 6:4, opacity: selected?1:0.8, routeIndex: ruta._ui.index }).addTo(layers.buses);
+    poly.options.routeIndex = ruta._ui.index;
+  }
+
+  // 3) caminata: dos tramos (origen->boarding) y (alight->destino)
+  // obtener origen/destino a usar: si los inputs no tenían coords, ignora los tramos de caminata (backend debió devolver distancias)
+  const origenParsed = parseLatLng(origenInput.value);
+  const destinoParsed = parseLatLng(destinoInput.value);
+
+  // helper para trazar walking via OSRM si está disponible
+  async function drawWalking(from, to, idx, label){
+    if(!from || !to) return;
+    // try OSRM
+    if(OSRM_ROUTE_SERVER){
+      try {
+        const url = `${OSRM_ROUTE_SERVER}/route/v1/foot/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson`;
+        const r = await fetch(url);
+        if(r.ok){
+          const j = await r.json();
+          if(j.routes && j.routes[0] && j.routes[0].geometry && j.routes[0].geometry.coordinates.length){
+            const coords = j.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
+            const line = L.polyline(coords, { dashArray:'8 6', weight:4, opacity: selected?1:0.6, color:'#6b7280', routeIndex: idx }).addTo(layers.walking);
+            line.options.routeIndex = idx;
+            return;
+          }
+        }
+      } catch(e){
+        console.warn('OSRM fail, fallback to straight', e);
+      }
+    }
+    // fallback: straight line
+    const line2 = L.polyline([[from.lat,from.lng],[to.lat,to.lng]], { dashArray:'8 6', weight:4, opacity: selected?1:0.6, color:'#6b7280', routeIndex: idx }).addTo(layers.walking);
+    line2.options.routeIndex = idx;
+  }
+
+  // draw walking segments if inputs parsed
+  await drawWalking(origenParsed, { lat: boarding.lat, lng: boarding.lng }, ruta._ui.index, 'subida');
+  await drawWalking({ lat: alight.lat, lng: alight.lng }, destinoParsed, ruta._ui.index, 'bajada');
+
+  // 4) markers boarding + alight con popups
+  const boardM = L.marker([boarding.lat, boarding.lng], { title:'Subir', routeIndex: ruta._ui.index }).addTo(layers.markers);
+  const alightM = L.marker([alight.lat, alight.lng], { title:'Bajar', routeIndex: ruta._ui.index }).addTo(layers.markers);
+  boardM.bindPopup(`<b>Subir</b><br/>Ruta ${ruta.numero} - ${ruta.nombre}<br/>Dist. a origen: ${boarding.distancia_origen ?? ''} m`);
+  alightM.bindPopup(`<b>Bajar</b><br/>Ruta ${ruta.numero} - ${ruta.nombre}<br/>Dist. a destino: ${alight.distancia_destino ?? ''} m`);
+
+  // center / zoom: expand bounds for this ruta
+  const bounds = L.latLngBounds([[boarding.lat, boarding.lng],[alight.lat, alight.lng]]);
+  if(busPoints && busPoints.length) busPoints.forEach(p => bounds.extend(p));
+  // store bounds in UI for selection
+  ruta._ui.bounds = bounds;
+}
+
+// Initial view
+map.setView([13.693, -89.218], 15);
+</script>
+
+</body>
+</html>

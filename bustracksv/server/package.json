@@ -1,0 +1,52 @@
+{
+  "name": "bustracksv-backend",
+  "version": "1.0.0",
+  "description": "Backend API para el sistema de rastreo de buses de El Salvador",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "create-admin": "node create-admin-user.js",
+    "migrate-rol": "node migrate-add-rol.js",
+    "migrate-to-postgres": "node scripts/migrate-sqlite-to-postgres.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:firestore": "tsx test-upload.ts",
+    "build:ts": "tsc",
+    "dev:ts": "tsx watch src/index.ts"
+  },
+  "keywords": [
+    "bus-tracking",
+    "api",
+    "express",
+    "postgresql",
+    "jwt",
+    "el-salvador"
+  ],
+  "author": "BusTrackSV Team",
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@googlemaps/google-maps-services-js": "^3.4.2",
+    "@turf/turf": "^7.3.1",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.1.5",
+    "firebase-admin": "^13.0.2",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.16.3",
+    "redis": "^4.6.12",
+    "sql.js": "^1.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,46 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+!README.md
+DOCS/
+docs/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Scripts (except Docker related)
+*.ps1
+*.bat
+!docker-compose.yml
+!Dockerfile*
+
+# Database backups
+*.sqlite
+*.sqlite3
+backups/
+

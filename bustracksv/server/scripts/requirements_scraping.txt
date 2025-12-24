@@ -1,0 +1,8 @@
+# Dependencias para el script de scraping de Cartorux
+# Instalar con: pip install -r requirements_scraping.txt
+
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
+

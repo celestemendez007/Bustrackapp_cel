@@ -1,0 +1,80 @@
+version: "3.8"
+
+services:
+  # Base de datos PostgreSQL con PostGIS
+  postgres:
+    image: postgis/postgis:15-3.4
+    container_name: bustracksv-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-bustracksv}
+      POSTGRES_USER: ${DB_USER:-bustracksv}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me_in_production}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./bustracksv/server/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - bustracksv-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-bustracksv}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ./bustracksv/server
+      dockerfile: Dockerfile
+    container_name: bustracksv-backend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - DATABASE_URL=postgresql://${DB_USER:-bustracksv}:${DB_PASSWORD:-change_me_in_production}@postgres:5432/${DB_NAME:-bustracksv}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-bustracksv}
+      - DB_USER=${DB_USER:-bustracksv}
+      - DB_PASSWORD=${DB_PASSWORD:-change_me_in_production}
+      - JWT_SECRET=${JWT_SECRET:-change_me_in_production}
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-/app/config/firebase-key.json}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+    ports:
+      - "${BACKEND_PORT:-4000}:4000"
+    volumes:
+      - ./bustracksv/server/config:/app/config:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - bustracksv-network
+
+  # Frontend (React/Vite)
+  frontend:
+    build:
+      context: ./bustracksv/client
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:4000}
+    container_name: bustracksv-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      - backend
+    networks:
+      - bustracksv-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  bustracksv-network:
+    driver: bridge
+

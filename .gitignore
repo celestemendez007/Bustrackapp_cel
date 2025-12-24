@@ -1,0 +1,62 @@
+# Variables de entorno y archivos sensibles
+.env
+.env.local
+.env.*.local
+*.env
+
+# Firebase credentials
+**/config/firebase-key.json
+**/firebase-key.json
+google-services.json
+GoogleService-Info.plist
+
+# Node modules
+node_modules/
+**/node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Base de datos SQLite local
+*.sqlite
+*.sqlite3
+*.db
+**/backups/*.sqlite
+
+# Build outputs
+dist/
+build/
+**/dist/
+**/build/
+.dev-dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cache
+.cache/
+.temp/
+.tmp/
+
+# Coverage
+coverage/
+*.lcov
+
+# Archivos temporales
+*.pid
+*.seed
+*.pid.lock
+tmp/
+pids/
+

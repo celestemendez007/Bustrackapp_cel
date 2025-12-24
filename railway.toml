@@ -1,0 +1,14 @@
+# Configuración de Railway para BusTrackSV
+# Railway detectará automáticamente los servicios desde docker-compose.yml
+# O puedes desplegar servicios individualmente
+
+[build]
+builder = "DOCKERFILE"
+
+[deploy]
+startCommand = "node src/index.js"
+healthcheckPath = "/"
+healthcheckTimeout = 100
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+

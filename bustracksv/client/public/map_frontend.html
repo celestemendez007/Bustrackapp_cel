@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Buscar rutas de bus - Cliente</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
+    <style>
+        :root {
+            --sidebar-w: 360px;
+            --bg: #0b0f14;
+            --card: #0f1720;
+            --accent: #2b7ce9;
+            --muted: #94a3b8;
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, system-ui, Arial;
+            background: linear-gradient(180deg, #081222, #06111a);
+            color: #e6eef8;
+            height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            gap: 20px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .sidebar {
+            width: var(--sidebar-w);
+            background: rgba(16, 22, 30, 0.7);
+            border-radius: 12px;
+            padding: 18px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+        }
+
+        h2 {
+            margin: 0 0 12px 0;
+            font-size: 18px;
+            color: #ffd166;
+        }
+
+        label {
+            font-size: 13px;
+            color: var(--muted);
+            display: block;
+            margin-top: 10px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.02);
+            color: #eef;
+            box-sizing: border-box;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .btn {
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: none;
+            font-weight: 600;
+        }
+
+        .btn.primary {
+            background: #2b7ce9;
+            color: white;
+            flex: 1;
+        }
+
+        .btn.ghost {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            color: var(--muted);
+        }
+
+        .btn.ghost:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .map-wrap {
+            flex: 1;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 30px rgba(2, 6, 23, 0.7);
+            background: white;
+        }
+
+        #map {
+            height: 100%;
+            min-height: 600px;
+        }
+
+        .routes-list {
+            margin-top: 12px;
+            max-height: calc(100vh - 400px);
+            overflow: auto;
+        }
+
+        .route-item {
+            padding: 10px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .route-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .route-item.active {
+            outline: 2px solid rgba(43, 124, 233, 0.25);
+            background: rgba(43, 124, 233, 0.06);
+        }
+
+        .msg {
+            margin-top: 12px;
+            padding: 10px;
+            border-radius: 8px;
+            background: #2a2a2a;
+            color: #ffc;
+            font-size: 13px;
+        }
+
+        .summary {
+            margin-top: 10px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <div class="sidebar">
+            <h2>Buscar rutas de bus</h2>
+
+            <label for="origen">Origen (Lat, Lng)</label>
+            <input id="origen" type="text" placeholder="Ej: 13.693, -89.218" />
+
+            <div style="display:flex; gap:8px; margin-top:8px;">
+                <button id="btnMiUbic" class="btn ghost">📍 Mi ubicación</button>
+            </div>
+
+            <label for="destino">Destino (Lat, Lng)</label>
+            <input id="destino" type="text" placeholder="Ej: 13.701, -89.224" />
+
+            <div class="btn-row">
+                <button id="btnBuscar" class="btn primary">Buscar Rutas</button>
+                <button id="btnLimpiar" class="btn ghost">Limpiar</button>
+            </div>
+
+            <div id="message" class="msg" style="display:none;"></div>
+
+            <div class="summary" id="summaryBox" style="display:none;"></div>
+            <div class="routes-list" id="routesList"></div>
+        </div>
+
+        <div class="map-wrap">
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <script>
+        /* ---------- CONFIG ---------- */
+        const BACKEND_BUSCAR = 'http://localhost:4000/buscar-rutas';
+        const OSRM_ROUTE_SERVER = null; // Pon 'http://localhost:5000' si tienes OSRM local
+        const WALK_SPEED_M_S = 1.25; // 4.5 km/h ~ 1.25 m/s
+        const MAX_RESULTS = 5;
+
+        /* ---------- UTILIDADES ---------- */
+        function parseLatLng(text) {
+            if (!text) return null;
+            const parts = text.split(',').map(s => s.trim());
+            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                return { lat: parseFloat(parts[0]), lng: parseFloat(parts[1]) };
+            }
+            return null;
+        }
+        function msToMin(m) { return Math.round((m / WALK_SPEED_M_S) / 60); }
+
+        /* ---------- MAP ---------- */
+        // Centrado en San Salvador por defecto
+        const map = L.map('map', { zoomControl: true }).setView([13.698, -89.191], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        const layers = {
+            walking: L.layerGroup().addTo(map),
+            buses: L.layerGroup().addTo(map),
+            markers: L.layerGroup().addTo(map)
+        };
+
+        function clearMap() {
+            layers.walking.clearLayers();
+            layers.buses.clearLayers();
+            layers.markers.clearLayers();
+            document.getElementById('routesList').innerHTML = '';
+            document.getElementById('summaryBox').style.display = 'none';
+        }
+
+        /* ---------- UI HOOKS ---------- */
+        const origenInput = document.getElementById('origen');
+        const destinoInput = document.getElementById('destino');
+        const btnMiUbic = document.getElementById('btnMiUbic');
+        const btnBuscar = document.getElementById('btnBuscar');
+        const btnLimpiar = document.getElementById('btnLimpiar');
+        const messageEl = document.getElementById('message');
+        const routesListEl = document.getElementById('routesList');
+        const summaryBox = document.getElementById('summaryBox');
+
+        btnMiUbic.addEventListener('click', () => {
+            if (!navigator.geolocation) {
+                showMessage('Geolocalización no disponible.');
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(pos => {
+                const lat = pos.coords.latitude, lng = pos.coords.longitude;
+                origenInput.value = lat.toFixed(6) + ',' + lng.toFixed(6);
+                // Añadir marcador visual temporal
+                L.circleMarker([lat, lng], { radius: 5, color: 'green' }).addTo(map).bindPopup("Tu ubicación").openPopup();
+                map.setView([lat, lng], 15);
+            }, err => showMessage('Error ubicación: ' + err.message));
+        });
+
+        btnLimpiar.addEventListener('click', () => {
+            origenInput.value = '';
+            destinoInput.value = '';
+            clearMap();
+            hideMessage();
+        });
+
+        btnBuscar.addEventListener('click', buscarRutas);
+
+        /* ---------- Mensajes ---------- */
+        function showMessage(txt) {
+            messageEl.style.display = 'block';
+            messageEl.innerText = txt;
+        }
+        function hideMessage() { messageEl.style.display = 'none'; }
+
+        /* ---------- LLAMADA AL BACKEND ---------- */
+        async function buscarRutas() {
+            hideMessage();
+            clearMap();
+
+            let origen = parseLatLng(origenInput.value);
+            let destino = parseLatLng(destinoInput.value);
+
+            if (!origen || !destino) {
+                showMessage("Por favor ingresa coordenadas válidas (lat,lng).");
+                return;
+            }
+
+            const payload = { origen, destino };
+
+            showMessage('Calculando rutas...');
+            try {
+                const res = await fetch(BACKEND_BUSCAR, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) throw new Error('Error en servidor');
+                const data = await res.json();
+                renderResults(data, origen, destino);
+            } catch (err) {
+                showMessage('Error: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        /* ---------- RENDER RESULTADOS ---------- */
+        function renderResults(data, origenOverride, destinoOverride) {
+            if (!data || !Array.isArray(data.rutas) || data.rutas.length === 0) {
+                showMessage('No se encontraron rutas cercanas que cumplan los criterios.');
+                return;
+            }
+            hideMessage();
+            const rutas = data.rutas.slice(0, MAX_RESULTS);
+
+            rutas.forEach((ruta, idx) => {
+                const item = document.createElement('div');
+                item.className = 'route-item';
+                item.innerHTML = `
+      <div>
+        <div style="font-weight:700; color:#fff">${ruta.numero} — ${ruta.nombre}</div>
+        <div style="font-size:12px;color:var(--muted)">Caminata total: ${ruta.distancia_caminata_total_m} m</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-weight:700; color:#2b7ce9">${(ruta.distancia_bus_m / 1000).toFixed(1)} km bus</div>
+        <div style="font-size:12px;color:var(--muted)">~${msToMin(ruta.distancia_caminata_total_m)} min a pie</div>
+      </div>`;
+                item.addEventListener('click', () => selectRoute(idx));
+                routesListEl.appendChild(item);
+
+                // Guardar referencia UI
+                ruta._ui = { itemElement: item, index: idx };
+                // Dibujar en mapa (inactivo)
+                drawRouteOnMap(ruta, false, origenOverride, destinoOverride);
+            });
+
+            // Seleccionar la primera (la mejor)
+            selectRoute(0);
+            summaryBox.style.display = 'block';
+            summaryBox.innerText = `Mejor opción: Ruta ${rutas[0].numero} (${rutas[0].distancia_caminata_total_m}m caminata)`;
+        }
+
+        /* ---------- SELECCIONAR RUTA ---------- */
+        function selectRoute(i) {
+            const items = document.querySelectorAll('.route-item');
+            items.forEach((el, idx) => el.classList.toggle('active', idx === i));
+
+            // Actualizar estilos en mapa
+            layers.buses.eachLayer(l => {
+                const isSelected = l.options.routeIndex === i;
+                l.setStyle({
+                    opacity: isSelected ? 1 : 0.3,
+                    weight: isSelected ? 6 : 3,
+                    color: isSelected ? '#2b7ce9' : '#555'
+                });
+                if (isSelected) l.bringToFront();
+            });
+
+            layers.walking.eachLayer(l => {
+                const isSelected = l.options.routeIndex === i;
+                l.setStyle({ opacity: isSelected ? 1 : 0.2 });
+            });
+
+            layers.markers.eachLayer(m => {
+                if (m.options.routeIndex === i) {
+                    m.setOpacity(1);
+                    if (m.getPopup()) m.openPopup();
+                } else {
+                    m.setOpacity(0.3);
+                    m.closePopup();
+                }
+            });
+
+            // Centrar mapa en la ruta seleccionada
+            layers.buses.eachLayer(l => {
+                if (l.options.routeIndex === i) map.fitBounds(l.getBounds().pad(0.1));
+            });
+        }
+
+        /* ---------- DIBUJAR RUTA ---------- */
+        async function drawRouteOnMap(ruta, selected, origen, destino) {
+            const idx = ruta._ui.index;
+            const boarding = ruta.boarding;
+            const alight = ruta.alight;
+
+            // 1. Marcadores Origen/Destino (Globales)
+            if (idx === 0) { // Solo dibujarlos una vez
+                L.circleMarker([origen.lat, origen.lng], { radius: 8, color: '#4ade80', fillOpacity: 1 }).addTo(layers.markers).bindTooltip("Origen");
+                L.circleMarker([destino.lat, destino.lng], { radius: 8, color: '#f87171', fillOpacity: 1 }).addTo(layers.markers).bindTooltip("Destino");
+            }
+
+            // 2. Trayecto Bus (Polyline sólida)
+            // Usamos slice_points que viene del backend
+            const busPoints = ruta.slice_points.map(p => [p.lat, p.lng]);
+            L.polyline(busPoints, {
+                color: '#2b7ce9',
+                weight: 4,
+                opacity: 0.8,
+                routeIndex: idx
+            }).addTo(layers.buses);
+
+            // 3. Caminatas (Origen -> Subida, Bajada -> Destino)
+            // Fallback línea recta si no hay OSRM
+            const walkStyle = { color: '#94a3b8', dashArray: '10, 10', weight: 4, opacity: 0.8, routeIndex: idx };
+
+            // Caminata Inicio
+            L.polyline([[origen.lat, origen.lng], [boarding.lat, boarding.lng]], walkStyle).addTo(layers.walking);
+
+            // Caminata Fin
+            L.polyline([[alight.lat, alight.lng], [destino.lat, destino.lng]], walkStyle).addTo(layers.walking);
+
+            // 4. Marcadores Subida/Bajada
+            const iconBus = L.divIcon({ className: 'custom-div-icon', html: "<div style='background-color:#2b7ce9;width:10px;height:10px;border-radius:50%;border:2px solid white;'></div>", iconSize: [14, 14] });
+
+            L.marker([boarding.lat, boarding.lng], { icon: iconBus, routeIndex: idx })
+                .addTo(layers.markers)
+                .bindPopup(`<b>Subir aquí</b><br>Ruta ${ruta.numero}<br>A ${boarding.distancia_origen}m del origen`);
+
+            L.marker([alight.lat, alight.lng], { icon: iconBus, routeIndex: idx })
+                .addTo(layers.markers)
+                .bindPopup(`<b>Bajar aquí</b><br>A ${alight.distancia_destino}m del destino`);
+        }
+
+    </script>
+</body>
+
+</html>

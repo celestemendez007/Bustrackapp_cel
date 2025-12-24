@@ -1,0 +1,115 @@
+# =========================
+# 🌐 GENERAL
+# =========================
+# Dependencias
+node_modules/
+jspm_packages/
+
+# Archivos de entorno
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# IDEs y editores
+.vscode/
+.idea/
+*.swp
+
+# Compilaciones y cachés
+dist/
+build/
+.cache/
+.temp/
+.tmp/
+out/
+coverage/
+*.tsbuildinfo
+
+# =========================
+# ⚙️ BACKEND (Express)
+# =========================
+# Compilación de TypeScript
+backend/dist/
+backend/build/
+
+# Archivos de ejecución
+*.pid
+*.seed
+*.pid.lock
+
+# Archivos temporales
+tmp/
+pids/
+logs/
+lib-cov/
+
+# PM2 / nodemon
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# =========================
+# ⚛️ FRONTEND (React + Vite)
+# =========================
+# Archivos generados por Vite
+frontend/dist/
+frontend/.vite/
+
+# Archivos generados por React (CRA)
+frontend/build/
+frontend/.cache/
+
+# Testing
+coverage/
+*.lcov
+
+# =========================
+# 🐳 DOCKER / DEPLOYMENT
+# =========================
+# Docker
+docker-compose.override.yml
+docker-compose.dev.yml
+.docker/
+.dockerignore
+
+# Producción
+.env.production
+.env.staging
+
+# =========================
+# 🧪 MISC
+# =========================
+# Reportes de pruebas
+coverage/
+reports/
+*.spec.js
+*.spec.ts
+*.test.js
+*.test.ts
+
+# Archivos de exportación
+*.tgz
+*.zip
+
+# =========================
+# 🔒 SENTRY / FIREBASE / API KEYS
+# =========================
+.sentryclirc
+firebase-debug.log
+google-services.json
+GoogleService-Info.plist

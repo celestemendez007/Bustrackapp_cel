@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" fill="none">
+  <!-- Winding curved path: starts bottom left, curves up, then down, ends right -->
+  <path d="M 40 160 Q 100 80 160 100 T 280 90 T 360 100" 
+        stroke="#60a5fa" 
+        stroke-width="5" 
+        fill="none" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"/>
+  
+  <!-- Location pin 1 (bottom left, start of path) -->
+  <circle cx="40" cy="160" r="7" fill="#60a5fa"/>
+  <circle cx="40" cy="160" r="3.5" fill="transparent"/>
+  <path d="M 40 167 L 33 180 L 47 180 Z" fill="#60a5fa"/>
+  
+  <!-- Location pin 2 (first curve) -->
+  <circle cx="120" cy="90" r="7" fill="#60a5fa"/>
+  <circle cx="120" cy="90" r="3.5" fill="transparent"/>
+  <path d="M 120 97 L 113 110 L 127 110 Z" fill="#60a5fa"/>
+  
+  <!-- Location pin 3 (middle curve) -->
+  <circle cx="240" cy="95" r="7" fill="#60a5fa"/>
+  <circle cx="240" cy="95" r="3.5" fill="transparent"/>
+  <path d="M 240 102 L 233 115 L 247 115 Z" fill="#60a5fa"/>
+  
+  <!-- Location pin 4 (right, end of path) -->
+  <circle cx="360" cy="100" r="7" fill="#60a5fa"/>
+  <circle cx="360" cy="100" r="3.5" fill="transparent"/>
+  <path d="M 360 107 L 353 120 L 367 120 Z" fill="#60a5fa"/>
+</svg>

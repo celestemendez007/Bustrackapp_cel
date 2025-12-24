@@ -1,0 +1,74 @@
+# Configuración de Render.com para BusTrackSV
+# Documentación: https://render.com/docs/yaml-spec
+
+services:
+  # Base de datos PostgreSQL
+  - type: pspg
+    name: bustracksv-db
+    plan: starter  # Puedes cambiarlo a standard o pro según necesites
+    databaseName: bustracksv
+    postgresMajorVersion: 15
+    user: bustracksv
+
+  # Servicio Backend API
+  - type: web
+    name: bustracksv-backend
+    runtime: docker
+    plan: starter  # Puedes cambiarlo según necesites
+    dockerfilePath: ./bustracksv/server/Dockerfile
+    dockerContext: ./bustracksv/server
+    dockerCommand: node src/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bustracksv-db
+          property: connectionString
+      - key: DB_HOST
+        fromDatabase:
+          name: bustracksv-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: bustracksv-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: bustracksv-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: bustracksv-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: bustracksv-db
+          property: password
+      - key: JWT_SECRET
+        generateValue: true  # Render generará un secreto aleatorio
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false  # Debes configurarlo manualmente en el dashboard
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /app/config/firebase-key.json
+      - key: FIREBASE_PROJECT_ID
+        sync: false  # Debes configurarlo manualmente en el dashboard
+
+  # Servicio Frontend
+  - type: web
+    name: bustracksv-frontend
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./bustracksv/client/Dockerfile
+    dockerContext: ./bustracksv/client
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: bustracksv-backend
+          type: web
+          property: host  # Usará la URL del backend en Render
+      # Nota: En Render, necesitarás configurar el build command manualmente en el dashboard
+      # Build Command: docker build --build-arg VITE_API_URL=$VITE_API_URL -t bustracksv-frontend .
+

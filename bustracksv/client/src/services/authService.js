@@ -18,10 +18,24 @@ class AuthService {
         data: response.data,
       };
     } catch (error) {
+      // Manejar diferentes tipos de errores
+      let errorMessage = "Error al registrar usuario";
+      
+      if (error.response) {
+        // El servidor respondió con un código de error
+        errorMessage = error.response.data?.message || errorMessage;
+      } else if (error.request) {
+        // La petición se hizo pero no hubo respuesta
+        errorMessage = "No se pudo conectar al servidor. Por favor, intenta de nuevo.";
+      } else {
+        // Algo más causó el error
+        errorMessage = error.message || errorMessage;
+      }
+      
       return {
         success: false,
-        message: error.response?.data?.message || "Error al registrar usuario",
-        error: error.response?.data,
+        message: errorMessage,
+        error: error.response?.data || error.message,
       };
     }
   }

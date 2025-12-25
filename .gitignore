@@ -63,3 +63,8 @@ coverage/
 *.pid.lock
 tmp/
 pids/
+
+node_modules/
+.env
+dist/
+build/

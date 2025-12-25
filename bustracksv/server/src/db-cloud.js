@@ -85,6 +85,44 @@ export const checkPostGIS = async () => {
   }
 };
 
+// Función para inicializar el esquema de la base de datos
+export const ensureSchema = async () => {
+  try {
+    console.log('🔍 Verificando esquema de base de datos...');
+    
+    // Crear tabla usuarios si no existe
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS usuarios (
+        id SERIAL PRIMARY KEY,
+        usuario VARCHAR(100) NOT NULL UNIQUE,
+        password TEXT NOT NULL,
+        email VARCHAR(255) UNIQUE,
+        nombre_completo VARCHAR(255),
+        telefono VARCHAR(50),
+        foto_perfil TEXT,
+        fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ultimo_acceso TIMESTAMP,
+        activo BOOLEAN DEFAULT TRUE,
+        preferencias JSONB DEFAULT '{}'::jsonb,
+        rol VARCHAR(50) DEFAULT 'usuario'
+      );
+    `);
+    
+    // Crear índices para usuarios
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_usuarios_usuario ON usuarios(usuario);
+      CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(email);
+      CREATE INDEX IF NOT EXISTS idx_usuarios_rol ON usuarios(rol);
+    `);
+    
+    console.log('✅ Esquema de usuarios verificado/creado');
+    return true;
+  } catch (err) {
+    console.error('❌ Error al crear esquema:', err);
+    return false;
+  }
+};
+
 // Función para crear índices optimizados si no existen
 export const ensureIndexes = async () => {
   try {
@@ -154,6 +192,9 @@ export const getDatabaseStats = async () => {
     return null;
   }
 };
+
+// Exportar funciones adicionales
+export { ensureSchema };
 
 // Exportar por defecto para compatibilidad
 export default pool;

@@ -37,7 +37,13 @@ if (useCloud) {
   pool = dbCloud.pool;
   testConnection = dbCloud.testConnection;
   ensureIndexes = dbCloud.ensureIndexes;
+  const ensureSchema = dbCloud.ensureSchema;
   console.log('☁️ Modo Cloud: Usando PostgreSQL');
+  
+  // Asegurar que el esquema existe
+  if (ensureSchema) {
+    await ensureSchema();
+  }
 } else {
   // Modo Local: Usar SQLite
   const dbLocal = await import("./db.js");

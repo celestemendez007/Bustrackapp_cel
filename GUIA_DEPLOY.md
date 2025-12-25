@@ -281,42 +281,241 @@ Valor: tu-servicio.onrender.com (o railway.app)
 
 ---
 
-## 🔍 Verificación Post-Despliegue
+## ✅ PASOS DESPUÉS DEL DESPLIEGUE (¡Haz esto ahora!)
 
-1. **Verifica que el backend funciona:**
+Si ya tienes tus servicios desplegados en Render (como en la imagen), sigue estos pasos:
+
+### Paso 1: Crear Base de Datos PostgreSQL
+
+1. En Render, ve a tu dashboard
+2. Click en **"New +"** → **"PostgreSQL"**
+3. Configura:
+   - **Name:** `bustracksv-db`
+   - **Database:** `bustracksv`
+   - **User:** `bustracksv`
+   - **Plan:** Starter (gratis) o superior
+4. **IMPORTANTE:** Guarda la `DATABASE_URL` que Render te muestra (algo como: `postgresql://user:pass@host:5432/bustracksv`)
+
+### Paso 2: Configurar Variables de Entorno en el Backend
+
+**📍 Ubicación exacta en Render:**
+
+1. **Abre el Dashboard de Render:**
+   - Ve a: https://dashboard.render.com
+   - Inicia sesión con tu cuenta
+
+2. **Selecciona tu servicio:**
+   - En la lista de servicios, busca y haz clic en tu servicio backend
+   - (Probablemente se llama `bustrackapp-cel` o similar)
+
+3. **Abre la sección "Environment":**
+   - En el **menú lateral izquierdo**, busca y haz clic en **"Environment"**
+   - (También puede aparecer como "Environment Variables" o "Env")
+
+4. **Agrega las variables de entorno:**
+   - Haz clic en el botón **"+ Add Environment Variable"** o **"Add"**
+   - Agrega cada variable una por una:
+     - **Key:** `GOOGLE_MAPS_API_KEY`
+     - **Value:** `tu_clave_de_google_maps_aqui` (ej: `AIzaSy...`)
+     - Haz clic en **"Save Changes"** o **"Add"**
+   
+   Repite este proceso para todas las variables necesarias:
+
    ```
-   https://tu-backend.com/health
+   DATABASE_URL=<la_URL_que_te_dio_Render_en_el_paso_1>
+   NODE_ENV=production
+   PORT=4000
+   JWT_SECRET=<genera_un_secreto_aleatorio_seguro>
+   GOOGLE_MAPS_API_KEY=<tu_clave_de_google_maps>
+   ALLOWED_ORIGINS=https://bustracksv-frontend.onrender.com
    ```
 
-2. **Verifica que el frontend carga:**
-   ```
-   https://tu-frontend.com
+5. **Render reiniciará automáticamente:**
+   - Después de guardar, Render detectará los cambios y reiniciará tu servicio automáticamente
+   - Puedes ver el progreso en la pestaña "Events" o "Logs"
+
+4. **Para generar JWT_SECRET:** Puedes usar cualquier generador online o ejecutar en PowerShell:
+   ```powershell
+   [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 }))
    ```
 
-3. **Verifica la conexión:**
-   - Abre la consola del navegador
-   - Debe conectarse al backend sin errores CORS
+5. Click en **"Save Changes"** - esto reiniciará tu backend
+
+### Paso 3: Inicializar el Esquema de la Base de Datos
+
+Necesitas ejecutar el script SQL de inicialización en tu base de datos PostgreSQL:
+
+**Opción A: Usar Render PostgreSQL Shell (Más fácil)**
+
+1. En Render, ve a tu base de datos PostgreSQL `bustracksv-db`
+2. Click en **"Info"** para ver las credenciales de conexión
+3. Anota estos valores:
+   - Host
+   - Database
+   - User
+   - Password
+   - Port (generalmente 5432)
+4. Descarga y lee el archivo `bustracksv/server/database/init.sql` desde tu código
+5. Ve a **"Connect"** → **"External Connection"** en Render
+6. Copia el comando de conexión que Render te da
+7. Usa un cliente PostgreSQL para conectarte:
+   - **pgAdmin** (GUI): https://www.pgadmin.org/download/
+   - **DBeaver** (GUI): https://dbeaver.io/download/
+   - **psql** (terminal): `psql "postgresql://user:pass@host:5432/bustracksv"`
+8. Una vez conectado, ejecuta todo el contenido del archivo `init.sql`
+
+**Opción B: Usar Render Shell (Alternativa)**
+
+1. Ve a tu servicio `bustracksv-backend` en Render
+2. Click en **"Shell"**
+3. Ejecuta:
+   ```bash
+   # Instalar psql si no está disponible
+   # Luego conéctate usando la DATABASE_URL
+   psql $DATABASE_URL < /opt/render/project/src/server/database/init.sql
+   ```
+   O si tienes acceso directo:
+   ```bash
+   psql "tu_DATABASE_URL_aqui" < /path/to/init.sql
+   ```
+
+**Nota:** Si Render no tiene `psql` instalado en el shell, usa la Opción A con un cliente externo.
+
+### Paso 4: Crear Usuario Administrador
+
+**Opción A: Desde Render Shell (Recomendado)**
+
+1. Ve a tu servicio `bustracksv-backend` en Render
+2. Click en **"Shell"** (en el menú lateral o en la parte superior)
+3. Ejecuta:
+   ```bash
+   cd /opt/render/project/src/bustracksv/server
+   node create-admin-user.js
+   ```
+   O si está en la raíz:
+   ```bash
+   cd /opt/render/project/src/server
+   node create-admin-user.js
+   ```
+
+**Opción B: Desde la Base de Datos directamente**
+
+Conéctate a PostgreSQL y ejecuta:
+```sql
+INSERT INTO usuarios (usuario, password, email, nombre_completo, rol) 
+VALUES (
+  'admin',
+  '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', -- Hash de 'admin123'
+  'admin@bustracksv.com',
+  'Administrador Sistema',
+  'admin'
+);
+```
+
+**Credenciales por defecto:**
+- Usuario: `admin`
+- Contraseña: `admin123`
+- ⚠️ **Cambia la contraseña después del primer acceso**
+
+### Paso 5: Configurar Variables de Entorno en el Frontend
+
+1. Ve a tu servicio **`bustracksv-frontend`** en Render
+2. Click en **"Environment"**
+3. Agrega:
+   ```
+   VITE_API_URL=https://bustracksv-backend.onrender.com
+   ```
+   (Reemplaza con la URL real de tu backend)
+4. **IMPORTANTE:** Después de agregar esta variable, necesitas hacer un **redeploy** del frontend para que se aplique
+
+### Paso 6: Verificar que Todo Funciona
+
+1. **Verifica el backend:**
+   - Abre en tu navegador: `https://bustracksv-backend.onrender.com/health`
+   - Debe responder con `{"status":"ok"}` o similar
+
+2. **Verifica el frontend:**
+   - Abre en tu navegador: `https://bustracksv-frontend.onrender.com`
+   - Debe cargar la aplicación
+
+3. **Verifica el login de administrador:**
+   - Ve a: `https://bustracksv-frontend.onrender.com/admin/login`
+   - Inicia sesión con: `admin` / `admin123`
+
+### Paso 7: Agregar a tu iPhone
+
+1. Abre Safari en tu iPhone
+2. Ve a la URL de tu frontend: `https://bustracksv-frontend.onrender.com`
+3. Toca el botón de compartir (cuadrado con flecha)
+4. Toca **"Agregar a pantalla de inicio"**
+5. Personaliza el nombre si quieres
+6. Toca **"Agregar"**
+7. ¡Listo! Ahora tienes un ícono en tu iPhone que abre tu app
+
+---
+
+## 🔍 Verificación Post-Despliegue (Checklist)
+
+1. ✅ **Base de datos PostgreSQL creada y conectada**
+2. ✅ **Variables de entorno configuradas en backend**
+3. ✅ **Variables de entorno configuradas en frontend**
+4. ✅ **Backend responde en:** `https://tu-backend.onrender.com/health`
+5. ✅ **Frontend carga en:** `https://tu-frontend.onrender.com`
+6. ✅ **Usuario administrador creado**
+7. ✅ **Login de administrador funciona**
+8. ✅ **CORS configurado correctamente** (ALLOWED_ORIGINS incluye la URL del frontend)
+9. ✅ **App agregada a iPhone/móvil**
+
+### Verificar la conexión:
+- Abre la consola del navegador (F12)
+- Debe conectarse al backend sin errores CORS
+- Si ves errores CORS, verifica que `ALLOWED_ORIGINS` en el backend incluya la URL exacta de tu frontend
 
 ---
 
 ## 🐛 Solución de Problemas
 
+### Cómo Ver los Logs en Render
+
+Si algo no funciona, revisa los logs:
+
+1. Ve a tu servicio en Render
+2. Click en **"Logs"** (en el menú lateral)
+3. Verás los logs en tiempo real
+4. Busca errores en rojo (especialmente errores de conexión a base de datos)
+
 ### Error: "Cannot connect to database"
-- Verifica que `DATABASE_URL` esté correctamente configurada
-- Verifica que el servicio de base de datos esté corriendo
-- Verifica los Security Groups/Firewall
+- ✅ Verifica que `DATABASE_URL` esté correctamente configurada en las variables de entorno
+- ✅ Verifica que el servicio de base de datos esté corriendo (debe decir "Active")
+- ✅ Asegúrate de que la URL no tenga espacios adicionales
+- ✅ Verifica en los logs del backend si hay errores de conexión
 
 ### Error: "CORS policy"
-- Agrega la URL del frontend a `ALLOWED_ORIGINS` en el backend
-- Verifica que ambos servicios estén en HTTPS (si es producción)
+- ✅ Agrega la URL exacta del frontend a `ALLOWED_ORIGINS` en el backend (incluye `https://` y sin barra final)
+- ✅ Ejemplo: `ALLOWED_ORIGINS=https://bustracksv-frontend.onrender.com`
+- ✅ Verifica que ambos servicios estén en HTTPS (si es producción)
+- ✅ Después de cambiar, haz un redeploy del backend
 
 ### Error: "404 Not Found" en rutas del frontend
-- Verifica que nginx esté configurado correctamente
-- El `nginx.conf` debe tener `try_files $uri $uri/ /index.html;`
+- ✅ Verifica que nginx esté configurado correctamente
+- ✅ El `nginx.conf` debe tener `try_files $uri $uri/ /index.html;`
+- ✅ Verifica que el build del frontend se completó exitosamente
 
 ### Error: "VITE_API_URL not defined"
-- Asegúrate de pasar `VITE_API_URL` como build arg al construir el Docker
-- O configura la variable antes del build en el proveedor
+- ✅ Agrega `VITE_API_URL` como variable de entorno en el frontend
+- ✅ **IMPORTANTE:** Después de agregar, necesitas hacer un **redeploy** del frontend
+- ✅ Verifica que la URL sea correcta (debe ser la URL de tu backend)
+
+### Error: "Base de datos no tiene tablas" o "relation does not exist"
+- ✅ Ejecuta el script `init.sql` en tu base de datos PostgreSQL
+- ✅ O verifica que el backend esté usando `db-cloud.js` (debe aparecer en los logs "☁️ Modo Cloud: Usando PostgreSQL")
+- ✅ Si no aparece ese mensaje, verifica que `DATABASE_URL` esté configurada
+
+### Backend no inicia o se crashea
+- ✅ Revisa los logs para ver el error exacto
+- ✅ Verifica que todas las variables de entorno estén configuradas
+- ✅ Verifica que `JWT_SECRET` esté configurado
+- ✅ Verifica que `GOOGLE_MAPS_API_KEY` esté configurado (si lo usas)
 
 ---
 

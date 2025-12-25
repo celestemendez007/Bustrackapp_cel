@@ -1922,7 +1922,8 @@ const startServer = async () => {
       console.log(`📊 Configuración:`);
       console.log(`   Puerto: ${PORT}`);
       console.log(`   Base de datos: ${useCloud ? 'PostgreSQL (Cloud)' : 'SQLite (Local)'}`);
-      console.log(`   Caché Redis: ${redisCache ? '✅ Activo' : '❌ No disponible'}`);
+      const redisStatus = redisCache?.isRedisAvailable ? redisCache.isRedisAvailable() : false;
+      console.log(`   Caché Redis: ${redisStatus ? '✅ Activo' : '❌ No disponible'}`);
       console.log(`   Seguridad: ${securityMiddleware ? '✅ Activa' : '⚠️ Básica'}`);
       console.log(`   Entorno: ${process.env.NODE_ENV || "development"}`);
       

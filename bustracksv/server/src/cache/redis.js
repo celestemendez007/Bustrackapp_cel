@@ -27,6 +27,11 @@ const isRedisConfigured = () => {
   return !!(process.env.REDIS_URL || process.env.REDIS_HOST);
 };
 
+// Función para verificar si Redis está realmente disponible
+export const isRedisAvailable = () => {
+  return isRedisConfigured() && isConnected && redisClient !== null;
+};
+
 // Configuración de Redis
 const getRedisConfig = () => {
   // Si hay URL completa (Upstash, Redis Cloud, etc.)
@@ -313,6 +318,6 @@ if (process.env.NODE_ENV !== 'test' && isRedisConfigured()) {
   });
 }
 
-export default { cache, routeCache, stopCache, searchCache, initRedis, closeRedis };
+export default { cache, routeCache, stopCache, searchCache, initRedis, closeRedis, isRedisAvailable };
 
 

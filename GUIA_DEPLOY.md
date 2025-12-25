@@ -15,6 +15,80 @@ Esta guía te ayudará a desplegar BusTrackSV en proveedores de nube como Render
    - `DATABASE_URL`: URL de conexión a PostgreSQL (la proporciona el proveedor)
    - `FIREBASE_PROJECT_ID`: ID de tu proyecto Firebase (opcional)
 
+## 🔑 Cómo Obtener las Claves Requeridas
+
+### 1. GOOGLE_MAPS_API_KEY (Clave de API de Google Cloud)
+
+**Pasos para obtenerla:**
+
+1. Ve a [Google Cloud Console](https://console.cloud.google.com/)
+2. Inicia sesión con tu cuenta de Google
+3. Crea un nuevo proyecto o selecciona uno existente:
+   - Click en el selector de proyectos (arriba a la izquierda)
+   - Click en "New Project"
+   - Ingresa un nombre (ej: "BusTrackSV")
+   - Click en "Create"
+4. Habilita las APIs necesarias:
+   - Ve a "APIs & Services" > "Library"
+   - Busca y habilita estas APIs:
+     - **Maps JavaScript API** (para mostrar mapas en el frontend)
+     - **Directions API** (para calcular rutas)
+     - **Geocoding API** (para convertir direcciones a coordenadas)
+5. Crea la API Key:
+   - Ve a "APIs & Services" > "Credentials"
+   - Click en "+ Create Credentials" > "API Key"
+   - Se mostrará tu clave (formato: `AIzaSy...`)
+   - **IMPORTANTE:** Guarda esta clave de forma segura
+6. (Opcional) Restringe la API Key:
+   - Click en "Restrict Key" para mayor seguridad
+   - Restringe por aplicación web y por APIs
+   
+**Valor a usar:**
+```
+GOOGLE_MAPS_API_KEY=AIzaSy...tu_clave_aqui...
+```
+
+---
+
+### 2. FIREBASE_PROJECT_ID (ID de Proyecto de Firebase)
+
+**Pasos para obtenerlo:**
+
+**Opción A: Si ya tienes un proyecto Firebase:**
+1. Ve a [Firebase Console](https://console.firebase.google.com/)
+2. Selecciona tu proyecto
+3. Ve a "Project Settings" (ícono de engranaje)
+4. En la sección "General", encontrarás "Project ID"
+5. Copia este ID
+
+**Opción B: Crear un nuevo proyecto Firebase:**
+1. Ve a [Firebase Console](https://console.firebase.google.com/)
+2. Click en "Add project" o "Create a project"
+3. Ingresa un nombre para el proyecto (ej: "bustracksv")
+4. (Opcional) Desactiva Google Analytics si no lo necesitas
+5. Click en "Create project"
+6. Una vez creado, ve a "Project Settings" (ícono de engranaje)
+7. En la sección "General", encontrarás "Project ID"
+8. Copia este ID
+
+**Nota:** Si usas Firebase, también necesitarás las credenciales:
+- Descarga el archivo JSON de credenciales desde:
+  - Google Cloud Console > IAM & Admin > Service Accounts
+  - Crea una cuenta de servicio > Keys > Create Key > JSON
+- Guarda el archivo como `firebase-key.json` en `server/config/`
+
+**Valor a usar:**
+```
+FIREBASE_PROJECT_ID=tu-proyecto-id
+```
+
+Ejemplo:
+```
+FIREBASE_PROJECT_ID=bustracksv-12345
+```
+
+---
+
 ## 🎯 Opción 1: Despliegue en Render.com
 
 ### Pasos:
@@ -283,4 +357,74 @@ Valor: tu-servicio.onrender.com (o railway.app)
 ---
 
 ¡Tu aplicación ahora está disponible públicamente en la nube! 🎉
+
+---
+
+## ❓ Preguntas Frecuentes (FAQ)
+
+### ¿Cómo hago para que funcione con todos los internets?
+
+**Respuesta:** Sigue los pasos en esta guía para subir el código a **Render** o **Railway**. Ellos ponen tu app en internet y te dan un link público que funciona desde cualquier lugar del mundo.
+
+**Pasos rápidos:**
+1. Crea una cuenta en [Render.com](https://render.com) o [Railway.app](https://railway.app)
+2. Conecta tu repositorio de GitHub
+3. Sigue las instrucciones de la sección "Opción 1: Despliegue en Render.com" o "Opción 2: Despliegue en Railway" de esta guía
+4. Una vez desplegado, tendrás un link como `https://bustracksv.onrender.com` que funciona desde cualquier dispositivo con internet
+
+---
+
+### ¿Que la base de datos sea para 6 millones de personas?
+
+**Respuesta:** He programado la app (`db.js`) para que se conecte automáticamente a **PostgreSQL** cuando la subas a la nube. Esa es la base de datos "gigante" que puede manejar millones de usuarios.
+
+**Cómo crearla con 1 clic:**
+
+**En Render:**
+1. En el dashboard, click en "New +"
+2. Selecciona "PostgreSQL"
+3. Elige un plan (Starter es gratis, pero para 6 millones de personas necesitarás un plan superior)
+4. Render te dará automáticamente la `DATABASE_URL` que debes usar en las variables de entorno
+
+**En Railway:**
+1. Railway crea automáticamente PostgreSQL cuando despliegas
+2. O puedes agregar manualmente: "New" → "Database" → "PostgreSQL"
+3. Railway te proporciona la `DATABASE_URL` automáticamente
+
+**Importante:** El código ya está listo. Solo necesitas crear la base de datos en el proveedor y configurar la variable `DATABASE_URL` en las variables de entorno de tu backend.
+
+---
+
+### ¿Poder verla en mi iPhone?
+
+**Respuesta:** ¡Sí! Al terminar el despliegue, tendrás un link (por ejemplo: `https://bustracksv.onrender.com`). Solo ábrelo en Safari en tu iPhone y agrégalo a inicio.
+
+**Pasos para agregarlo a inicio en iPhone:**
+1. Abre el link de tu app en Safari
+2. Toca el botón de compartir (cuadrado con flecha hacia arriba) en la parte inferior
+3. Desplázate hacia abajo y toca "Agregar a pantalla de inicio"
+4. Personaliza el nombre si quieres (ej: "BusTrackSV")
+5. Toca "Agregar"
+6. Ahora tendrás un ícono en tu pantalla de inicio que abre tu app como si fuera nativa
+
+**Nota:** La app funcionará como una Progressive Web App (PWA) en tu iPhone, con acceso rápido desde el ícono de inicio.
+
+---
+
+## 📌 Resumen Rápido
+
+✅ **El código YA está listo.** Solo falta que lo subas a la nube siguiendo esta guía.
+
+**Lo que necesitas hacer:**
+1. Crear cuenta en Render o Railway
+2. Subir tu código (conectar repositorio)
+3. Crear base de datos PostgreSQL (1 clic en el proveedor)
+4. Configurar variables de entorno
+5. ¡Listo! Tendrás tu link público
+
+**El código ya incluye:**
+- ✅ Conexión automática a PostgreSQL en la nube (`db.js`)
+- ✅ Configuración para producción
+- ✅ Soporte para millones de usuarios
+- ✅ Funciona en móviles (iPhone, Android, etc.)
 

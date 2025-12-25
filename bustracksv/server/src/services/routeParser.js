@@ -394,10 +394,13 @@ class RouteParser {
 
       if (existing.rows.length > 0) {
         // Actualizar: incrementar veces_usado y actualizar fecha
+        // Detectar si es PostgreSQL (cloud) o SQLite (local)
+        const isPostgreSQL = process.env.DATABASE_URL || process.env.DB_HOST;
+        const nowFunction = isPostgreSQL ? 'NOW()' : "datetime('now')";
         await this.pool.query(
           `UPDATE lugares_aprendidos 
            SET veces_usado = veces_usado + 1, 
-               fecha_ultimo_uso = datetime('now'),
+               fecha_ultimo_uso = ${nowFunction},
                busqueda = $1,
                coordenadas = $2
            WHERE nombre_normalizado = $3`,

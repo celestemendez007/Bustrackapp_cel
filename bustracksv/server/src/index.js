@@ -314,11 +314,11 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Contraseña incorrecta" });
     }
 
-    // Actualizar último acceso
-    await pool.query(
-      "UPDATE usuarios SET ultimo_acceso = datetime('now') WHERE id = $1",
-      [user.id]
-    );
+    // Actualizar último acceso (compatible con PostgreSQL y SQLite)
+    const updateQuery = useCloud 
+      ? "UPDATE usuarios SET ultimo_acceso = NOW() WHERE id = $1"
+      : "UPDATE usuarios SET ultimo_acceso = datetime('now') WHERE id = $1";
+    await pool.query(updateQuery, [user.id]);
 
     const token = jwt.sign(
       { id: user.id, usuario: user.usuario, rol: user.rol || 'usuario' },
@@ -1393,7 +1393,9 @@ app.put("/admin/rutas/:id", authenticateToken, requireAdmin, async (req, res) =>
       }
     }
 
-    updates.push(`fecha_actualizacion = datetime('now')`);
+    updates.push(useCloud 
+      ? `fecha_actualizacion = NOW()`
+      : `fecha_actualizacion = datetime('now')`);
     values.push(id);
 
     const result = await pool.query(

@@ -28,20 +28,21 @@ import jwt from "jsonwebtoken";
 // Detectar si usar cloud o local (prioridad: DATABASE_URL > DB_HOST > local)
 const useCloud = !!(process.env.DATABASE_URL || process.env.DB_HOST);
 
-// Importar base de datos (usar SQLite por defecto, cambiar manualmente si necesitas cloud)
-import { pool, testConnection } from "./db.js";
-let ensureIndexes = null;
+// Importar base de datos según el modo (PostgreSQL para cloud, SQLite para local)
+let pool, testConnection, ensureIndexes = null;
 
-// Si está configurado para cloud, intentar cargar db-cloud (pero no bloquear si falla)
 if (useCloud) {
-  import("./db-cloud.js").then(dbCloud => {
-    console.log('☁️ Modo Cloud: Usando PostgreSQL');
-    // Nota: pool ya está importado, pero en producción deberías cambiar el import
-    ensureIndexes = dbCloud.ensureIndexes;
-  }).catch(() => {
-    console.warn('⚠️ No se pudo cargar db-cloud.js, usando SQLite local');
-  });
+  // Modo Cloud: Usar PostgreSQL
+  const dbCloud = await import("./db-cloud.js");
+  pool = dbCloud.pool;
+  testConnection = dbCloud.testConnection;
+  ensureIndexes = dbCloud.ensureIndexes;
+  console.log('☁️ Modo Cloud: Usando PostgreSQL');
 } else {
+  // Modo Local: Usar SQLite
+  const dbLocal = await import("./db.js");
+  pool = dbLocal.pool;
+  testConnection = dbLocal.testConnection;
   console.log('💾 Modo Local: Usando SQLite');
 }
 
@@ -1905,14 +1906,11 @@ const startServer = async () => {
     }
 
     // Inicializar índices si está en modo cloud
-    if (useCloud && typeof ensureIndexes === 'function') {
+    if (useCloud && ensureIndexes && typeof ensureIndexes === 'function') {
       try {
-        const dbCloud = await import("./db-cloud.js");
-        if (dbCloud.ensureIndexes) {
-          await dbCloud.ensureIndexes();
-        }
+        await ensureIndexes();
       } catch (e) {
-        console.warn('⚠️ No se pudieron crear índices optimizados');
+        console.warn('⚠️ No se pudieron crear índices optimizados:', e.message);
       }
     }
 

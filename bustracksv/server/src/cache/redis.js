@@ -22,6 +22,11 @@ dotenv.config({ path: join(__dirname, '..', '..', '.env') });
 let redisClient = null;
 let isConnected = false;
 
+// Verificar si Redis está configurado
+const isRedisConfigured = () => {
+  return !!(process.env.REDIS_URL || process.env.REDIS_HOST);
+};
+
 // Configuración de Redis
 const getRedisConfig = () => {
   // Si hay URL completa (Upstash, Redis Cloud, etc.)
@@ -40,35 +45,66 @@ const getRedisConfig = () => {
     };
   }
   
-  // Configuración individual
-  return {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT) || 6379,
-    password: process.env.REDIS_PASSWORD || undefined,
-    socket: {
-      reconnectStrategy: (retries) => {
-        if (retries > 10) {
-          return new Error('Máximo de reintentos alcanzado');
+  // Configuración individual (solo si REDIS_HOST está configurado)
+  if (process.env.REDIS_HOST) {
+    return {
+      host: process.env.REDIS_HOST,
+      port: parseInt(process.env.REDIS_PORT) || 6379,
+      password: process.env.REDIS_PASSWORD || undefined,
+      socket: {
+        reconnectStrategy: (retries) => {
+          if (retries > 10) {
+            return new Error('Máximo de reintentos alcanzado');
+          }
+          return Math.min(retries * 100, 3000);
         }
-        return Math.min(retries * 100, 3000);
       }
-    }
-  };
+    };
+  }
+  
+  // No hay configuración, retornar null
+  return null;
 };
 
 // Inicializar cliente Redis
 export const initRedis = async () => {
   try {
+    // Si Redis no está configurado, no intentar conectarse
+    if (!isRedisConfigured()) {
+      console.log('ℹ️ Redis no configurado. Continuando sin caché.');
+      isConnected = false;
+      return null;
+    }
+
     if (redisClient && isConnected) {
       return redisClient;
     }
 
     const config = getRedisConfig();
+    if (!config) {
+      console.log('ℹ️ Redis no configurado. Continuando sin caché.');
+      isConnected = false;
+      return null;
+    }
+
     redisClient = createClient(config);
+
+    // Contador para limitar mensajes de error repetitivos
+    let errorCount = 0;
+    let lastErrorTime = 0;
 
     // Manejo de eventos
     redisClient.on('error', (err) => {
-      console.error('❌ Redis Client Error:', err);
+      const now = Date.now();
+      // Solo mostrar error cada 5 segundos para evitar spam
+      if (now - lastErrorTime > 5000) {
+        errorCount = 0;
+      }
+      if (errorCount === 0) {
+        console.error('❌ Redis Client Error:', err.message);
+      }
+      errorCount++;
+      lastErrorTime = now;
       isConnected = false;
     });
 
@@ -79,17 +115,24 @@ export const initRedis = async () => {
     redisClient.on('ready', () => {
       console.log('✅ Redis: Conectado y listo');
       isConnected = true;
+      errorCount = 0; // Resetear contador al conectar
     });
 
     redisClient.on('reconnecting', () => {
-      console.log('🔄 Redis: Reconectando...');
+      // Solo mostrar mensaje de reconexión ocasionalmente
+      if (Math.random() < 0.1) { // 10% de probabilidad
+        console.log('🔄 Redis: Reconectando...');
+      }
     });
 
     await redisClient.connect();
     return redisClient;
   } catch (error) {
-    console.error('❌ Error al inicializar Redis:', error.message);
-    console.warn('⚠️ Continuando sin caché. La aplicación funcionará pero será más lenta.');
+    // Solo mostrar error una vez
+    if (!isConnected) {
+      console.error('❌ Error al inicializar Redis:', error.message);
+      console.warn('⚠️ Continuando sin caché. La aplicación funcionará pero será más lenta.');
+    }
     isConnected = false;
     return null;
   }
@@ -97,6 +140,11 @@ export const initRedis = async () => {
 
 // Obtener cliente Redis (lazy initialization)
 export const getRedis = async () => {
+  // Si Redis no está configurado, retornar null inmediatamente
+  if (!isRedisConfigured()) {
+    return null;
+  }
+  
   if (!redisClient || !isConnected) {
     return await initRedis();
   }
@@ -258,9 +306,11 @@ export const closeRedis = async () => {
   }
 };
 
-// Inicializar automáticamente si no está en modo test
-if (process.env.NODE_ENV !== 'test') {
-  initRedis().catch(console.error);
+// Inicializar automáticamente solo si Redis está configurado y no está en modo test
+if (process.env.NODE_ENV !== 'test' && isRedisConfigured()) {
+  initRedis().catch(() => {
+    // Error ya manejado en initRedis, no hacer nada
+  });
 }
 
 export default { cache, routeCache, stopCache, searchCache, initRedis, closeRedis };

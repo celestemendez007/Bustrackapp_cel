@@ -44,3 +44,4 @@ SELECT usuario, email, rol, activo FROM usuarios WHERE usuario = 'admin_celeste'
 
 
 
+

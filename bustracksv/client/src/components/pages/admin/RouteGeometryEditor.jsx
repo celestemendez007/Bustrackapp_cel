@@ -3,7 +3,6 @@ import { GoogleMap, Polyline, Marker } from '@react-google-maps/api';
 import { useGoogleMaps } from '../../../contexts/GoogleMapsContext';
 import LeafletFallbackMap from './LeafletFallbackMap';
 import adminService from '../../../services/adminService.js';
-import routeService from '../../../services/routeService.js';
 
 const containerStyle = {
   width: '100%',
@@ -23,9 +22,6 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
   const [markersRegreso, setMarkersRegreso] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [recomendaciones, setRecomendaciones] = useState([]);
-  const [recomendacionesRegreso, setRecomendacionesRegreso] = useState([]);
-  const [showRecomendaciones, setShowRecomendaciones] = useState(false);
 
   // Inicializar
   useEffect(() => {
@@ -348,207 +344,6 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
     }
   };
 
-  // Geocodificar una dirección a coordenadas
-  const geocodificarDireccion = async (direccion) => {
-    if (!direccion || !direccion.trim()) return null;
-
-    // Si tenemos Google Maps disponible, usarlo
-    if (window.google && window.google.maps && window.google.maps.Geocoder) {
-      return new Promise((resolve) => {
-        const geocoder = new window.google.maps.Geocoder();
-        geocoder.geocode({ address: direccion }, (results, status) => {
-          if (status === window.google.maps.GeocoderStatus.OK && results && results.length > 0) {
-            const location = results[0].geometry.location;
-            resolve({
-              lat: location.lat(),
-              lng: location.lng(),
-              address: results[0].formatted_address
-            });
-          } else {
-            resolve(null);
-          }
-        });
-      });
-    }
-
-    // Fallback: usar el backend
-    try {
-      const response = await adminService.generateRoute(direccion);
-      if (response && response.success && response.data) {
-        const data = response.data.data || response.data;
-        if (data.puntos_geocodificados && data.puntos_geocodificados.length > 0) {
-          const punto = data.puntos_geocodificados[0];
-          return {
-            lat: parseFloat(punto.lat),
-            lng: parseFloat(punto.lng),
-            address: punto.nombre_original || punto.nombre || direccion
-          };
-        }
-      }
-    } catch (err) {
-      console.error('Error geocodificando dirección:', err);
-    }
-
-    return null;
-  };
-
-  // Obtener recomendaciones de ruta
-  const obtenerRecomendaciones = async (textoInput, esIda = true) => {
-    if (!textoInput || !textoInput.trim()) {
-      setError('Por favor ingresa una ruta con origen y destino');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const lugares = textoInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
-      if (lugares.length < 2) {
-        setError('Se necesitan al menos dos puntos (origen y destino)');
-        setLoading(false);
-        return;
-      }
-
-      const origenTexto = lugares[0];
-      const destinoTexto = lugares[lugares.length - 1];
-
-      // Geocodificar origen y destino
-      const [origen, destino] = await Promise.all([
-        geocodificarDireccion(origenTexto),
-        geocodificarDireccion(destinoTexto)
-      ]);
-
-      if (!origen || !destino) {
-        setError('No se pudieron obtener las coordenadas del origen o destino');
-        setLoading(false);
-        return;
-      }
-
-      // Obtener recomendaciones del servicio
-      const resultado = await routeService.recomendarRuta(
-        origen.lat,
-        origen.lng,
-        destino.lat,
-        destino.lng,
-        5000
-      );
-
-      if (resultado.success && resultado.data && resultado.data.recomendaciones) {
-        if (esIda) {
-          setRecomendaciones(resultado.data.recomendaciones);
-        } else {
-          setRecomendacionesRegreso(resultado.data.recomendaciones);
-        }
-        setShowRecomendaciones(true);
-      } else {
-        setError('No se encontraron rutas recomendadas');
-      }
-    } catch (err) {
-      console.error('Error obteniendo recomendaciones:', err);
-      setError('Error al obtener recomendaciones: ' + (err.message || 'Error desconocido'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Aplicar una recomendación seleccionada
-  const aplicarRecomendacion = (recomendacion, esIda = true) => {
-    if (!recomendacion || !recomendacion.segmentos) return;
-
-    const puntos = [];
-    const marcadores = [];
-    let marcadorIndex = 1;
-
-    recomendacion.segmentos.forEach((segmento, index) => {
-      // Obtener geometría del segmento (puede ser geometry o geometria)
-      const geometria = segmento.geometry || segmento.geometria || [];
-      
-      if (Array.isArray(geometria) && geometria.length > 0) {
-        // Agregar puntos de la geometría del segmento
-        geometria.forEach(punto => {
-          if (punto) {
-            const lat = parseFloat(punto.lat || punto.latitud);
-            const lng = parseFloat(punto.lng || punto.longitud);
-            if (!isNaN(lat) && !isNaN(lng)) {
-              puntos.push({ lat, lng });
-            }
-          }
-        });
-      }
-
-      // Agregar marcadores para paradas (tanto de bus como caminatas iniciales/finales)
-      // Para segmentos de bus, agregar paradas de inicio y fin
-      if (segmento.tipo === 'bus' || segmento.tipo === 'BUS') {
-        if (segmento.fromStop || segmento.paradaOrigen) {
-          const stop = segmento.fromStop || segmento.paradaOrigen;
-          marcadores.push({
-            lat: parseFloat(stop.lat || stop.latitud),
-            lng: parseFloat(stop.lng || stop.longitud),
-            address: stop.nombre || stop.address || `Parada ${marcadorIndex}`,
-            nombre: stop.nombre || `Parada ${marcadorIndex}`,
-            tipo: 'bus'
-          });
-          marcadorIndex++;
-        }
-        if (segmento.toStop || segmento.paradaDestino) {
-          const stop = segmento.toStop || segmento.paradaDestino;
-          marcadores.push({
-            lat: parseFloat(stop.lat || stop.latitud),
-            lng: parseFloat(stop.lng || stop.longitud),
-            address: stop.nombre || stop.address || `Parada ${marcadorIndex}`,
-            nombre: stop.nombre || `Parada ${marcadorIndex}`,
-            tipo: 'bus'
-          });
-          marcadorIndex++;
-        }
-      } else if (segmento.tipo === 'WALK' || segmento.tipo === 'walk') {
-        // Para caminatas, si tienen paradas definidas, agregarlas también
-        if (segmento.fromStop) {
-          marcadores.push({
-            lat: parseFloat(segmento.fromStop.lat || segmento.fromStop.latitud),
-            lng: parseFloat(segmento.fromStop.lng || segmento.fromStop.longitud),
-            address: segmento.fromStop.nombre || segmento.fromStop.address || `Inicio caminata`,
-            nombre: segmento.fromStop.nombre || `Inicio caminata`,
-            tipo: 'walk'
-          });
-        }
-        if (segmento.toStop) {
-          marcadores.push({
-            lat: parseFloat(segmento.toStop.lat || segmento.toStop.latitud),
-            lng: parseFloat(segmento.toStop.lng || segmento.toStop.longitud),
-            address: segmento.toStop.nombre || segmento.toStop.address || `Fin caminata`,
-            nombre: segmento.toStop.nombre || `Fin caminata`,
-            tipo: 'walk'
-          });
-        }
-      }
-    });
-
-    // Si no hay puntos pero hay marcadores, crear una ruta simple entre marcadores
-    if (puntos.length === 0 && marcadores.length > 0) {
-      marcadores.forEach(m => {
-        puntos.push({ lat: m.lat, lng: m.lng });
-      });
-    }
-
-    if (esIda) {
-      setPathIda(puntos);
-      setMarkersIda(marcadores);
-      // Actualizar el texto con el resumen de la recomendación
-      if (recomendacion.resumen) {
-        setTextoIda(recomendacion.resumen);
-      }
-    } else {
-      setPathRegreso(puntos);
-      setMarkersRegreso(marcadores);
-      if (recomendacion.resumen) {
-        setTextoRegreso(recomendacion.resumen);
-      }
-    }
-
-    setShowRecomendaciones(false);
-  };
 
   const handleUpdate = () => {
     const finalGeometry = { ida: pathIda, regreso: pathRegreso };
@@ -561,11 +356,25 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
   const renderMapContent = () => {
     // SI HAY ERROR DE CARGA O MODO FALLBACK, USAMOS LEAFLET
     if (loadError) {
-      const mapIda = pathIda.map(p => [p.lat, p.lng]);
-      const mapRegreso = pathRegreso.map(p => [p.lat, p.lng]);
+      // Convertir coordenadas a formato Leaflet [lat, lng]
+      const mapIda = pathIda.filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number')
+        .map(p => [p.lat, p.lng]);
+      const mapRegreso = pathRegreso.filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number')
+        .map(p => [p.lat, p.lng]);
+      
       const puntosLeaflet = {
-        ida: markersIda.map(m => ({ coordenadas: [m.lat, m.lng], nombre: m.nombre, direccion: m.address })),
-        regreso: markersRegreso.map(m => ({ coordenadas: [m.lat, m.lng], nombre: m.nombre, direccion: m.address }))
+        ida: markersIda.filter(m => m && typeof m.lat === 'number' && typeof m.lng === 'number')
+          .map(m => ({ 
+            coordenadas: [m.lat, m.lng], 
+            nombre: m.nombre || m.address || 'Punto', 
+            direccion: m.address || m.nombre || '' 
+          })),
+        regreso: markersRegreso.filter(m => m && typeof m.lat === 'number' && typeof m.lng === 'number')
+          .map(m => ({ 
+            coordenadas: [m.lat, m.lng], 
+            nombre: m.nombre || m.address || 'Punto', 
+            direccion: m.address || m.nombre || '' 
+          }))
       };
 
       return (
@@ -609,7 +418,8 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
         {/* Trazado Ida - AZUL */}
         {pathIda.length > 0 && (
           <Polyline
-            path={pathIda}
+            key="polyline-ida"
+            path={pathIda.filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number')}
             options={{
               strokeColor: '#3b82f6', // blue-500
               strokeOpacity: 0.8,
@@ -620,31 +430,29 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
         )}
 
         {/* Marcadores Ida */}
-        {markersIda.map((m, i) => {
-          if (!m || typeof m.lat !== 'number' || typeof m.lng !== 'number') return null;
-          return (
-            <Marker
-              key={`ida-${i}`}
-              position={{ lat: m.lat, lng: m.lng }}
-              label={{ text: (i + 1).toString(), color: "white", fontSize: "10px", fontWeight: "bold" }}
-              title={m.address}
-              icon={window.google?.maps?.SymbolPath ? {
-                path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z", // Pin Icon
-                fillColor: '#2563eb', // blue-600
-                fillOpacity: 1,
-                strokeColor: 'white',
-                strokeWeight: 1,
-                scale: 1.5,
-                anchor: new window.google.maps.Point(12, 22)
-              } : undefined}
-            />
-          );
-        })}
+        {markersIda.filter(m => m && typeof m.lat === 'number' && typeof m.lng === 'number').map((m, i) => (
+          <Marker
+            key={`ida-${i}`}
+            position={{ lat: m.lat, lng: m.lng }}
+            label={{ text: (i + 1).toString(), color: "white", fontSize: "10px", fontWeight: "bold" }}
+            title={m.address || m.nombre || `Punto ${i + 1}`}
+            icon={window.google?.maps?.SymbolPath ? {
+              path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z", // Pin Icon
+              fillColor: '#2563eb', // blue-600
+              fillOpacity: 1,
+              strokeColor: 'white',
+              strokeWeight: 1,
+              scale: 1.5,
+              anchor: new window.google.maps.Point(12, 22)
+            } : undefined}
+          />
+        ))}
 
         {/* Trazado Regreso - ROJO */}
         {pathRegreso.length > 0 && (
           <Polyline
-            path={pathRegreso}
+            key="polyline-regreso"
+            path={pathRegreso.filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number')}
             options={{
               strokeColor: '#ef4444', // red-500
               strokeOpacity: 0.8,
@@ -655,26 +463,23 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
         )}
 
         {/* Marcadores Regreso */}
-        {markersRegreso.map((m, i) => {
-          if (!m || typeof m.lat !== 'number' || typeof m.lng !== 'number') return null;
-          return (
-            <Marker
-              key={`regreso-${i}`}
-              position={{ lat: m.lat, lng: m.lng }}
-              label={{ text: (i + 1).toString(), color: "white", fontSize: "10px", fontWeight: "bold" }}
-              title={m.address}
-              icon={window.google?.maps?.SymbolPath ? {
-                path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z", // Pin Icon
-                fillColor: '#dc2626', // red-600
-                fillOpacity: 1,
-                strokeColor: 'white',
-                strokeWeight: 1,
-                scale: 1.5,
-                anchor: new window.google.maps.Point(12, 22)
-              } : undefined}
-            />
-          );
-        })}
+        {markersRegreso.filter(m => m && typeof m.lat === 'number' && typeof m.lng === 'number').map((m, i) => (
+          <Marker
+            key={`regreso-${i}`}
+            position={{ lat: m.lat, lng: m.lng }}
+            label={{ text: (i + 1).toString(), color: "white", fontSize: "10px", fontWeight: "bold" }}
+            title={m.address || m.nombre || `Punto ${i + 1}`}
+            icon={window.google?.maps?.SymbolPath ? {
+              path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z", // Pin Icon
+              fillColor: '#dc2626', // red-600
+              fillOpacity: 1,
+              strokeColor: 'white',
+              strokeWeight: 1,
+              scale: 1.5,
+              anchor: new window.google.maps.Point(12, 22)
+            } : undefined}
+          />
+        ))}
 
         {/* Paradas de la Ruta (DB) */}
         {stops && stops.map((stop, i) => (
@@ -716,151 +521,6 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
           />
         )}
 
-        {/* Rutas Recomendadas - Ida (Verde) */}
-        {showRecomendaciones && recomendaciones.length > 0 && recomendaciones.map((rec, recIdx) => {
-          if (!rec.segmentos) return null;
-          return rec.segmentos.map((seg, segIdx) => {
-            let puntos = [];
-            
-            // Obtener geometría del segmento
-            const geometry = seg.geometry || seg.geometria || [];
-            if (Array.isArray(geometry) && geometry.length > 0) {
-              puntos = geometry.map(p => {
-                if (!p) return null;
-                return {
-                  lat: parseFloat(p.lat || p.latitud),
-                  lng: parseFloat(p.lng || p.longitud)
-                };
-              }).filter(p => p && !isNaN(p.lat) && !isNaN(p.lng));
-            }
-            
-            // Si no hay geometría pero hay paradas, crear línea entre ellas
-            if (puntos.length === 0) {
-              if (seg.fromStop && seg.toStop) {
-                const fromStop = seg.fromStop;
-                const toStop = seg.toStop;
-                puntos = [
-                  {
-                    lat: parseFloat(fromStop.lat || fromStop.latitud),
-                    lng: parseFloat(fromStop.lng || fromStop.longitud)
-                  },
-                  {
-                    lat: parseFloat(toStop.lat || toStop.latitud),
-                    lng: parseFloat(toStop.lng || toStop.longitud)
-                  }
-                ].filter(p => !isNaN(p.lat) && !isNaN(p.lng));
-              } else if (seg.paradaOrigen && seg.paradaDestino) {
-                const fromStop = seg.paradaOrigen;
-                const toStop = seg.paradaDestino;
-                puntos = [
-                  {
-                    lat: parseFloat(fromStop.lat || fromStop.latitud),
-                    lng: parseFloat(fromStop.lng || fromStop.longitud)
-                  },
-                  {
-                    lat: parseFloat(toStop.lat || toStop.latitud),
-                    lng: parseFloat(toStop.lng || toStop.longitud)
-                  }
-                ].filter(p => !isNaN(p.lat) && !isNaN(p.lng));
-              }
-            }
-
-            if (puntos.length === 0) return null;
-
-            // Caminatas en verde claro, buses en el color de la ruta
-            const isWalking = seg.tipo === 'WALK' || seg.tipo === 'walk';
-            const strokeColor = isWalking
-              ? '#10b981' // green-500 para caminatas
-              : (seg.ruta?.color || seg.color || '#22c55e'); // Color de la ruta para buses
-
-            return (
-              <Polyline
-                key={`rec-ida-${recIdx}-${segIdx}`}
-                path={puntos}
-                options={{
-                  strokeColor: strokeColor,
-                  strokeOpacity: 0.6,
-                  strokeWeight: isWalking ? 3 : 4,
-                  zIndex: 15,
-                  geodesic: isWalking // Las caminatas pueden ser geodésicas
-                }}
-              />
-            );
-          });
-        })}
-
-        {/* Rutas Recomendadas - Regreso (Morado) */}
-        {showRecomendaciones && recomendacionesRegreso.length > 0 && recomendacionesRegreso.map((rec, recIdx) => {
-          if (!rec.segmentos) return null;
-          return rec.segmentos.map((seg, segIdx) => {
-            let puntos = [];
-            
-            // Obtener geometría del segmento
-            const geometry = seg.geometry || seg.geometria || [];
-            if (Array.isArray(geometry) && geometry.length > 0) {
-              puntos = geometry.map(p => {
-                if (!p) return null;
-                return {
-                  lat: parseFloat(p.lat || p.latitud),
-                  lng: parseFloat(p.lng || p.longitud)
-                };
-              }).filter(p => p && !isNaN(p.lat) && !isNaN(p.lng));
-            }
-            
-            // Si no hay geometría pero hay paradas, crear línea entre ellas
-            if (puntos.length === 0) {
-              if (seg.fromStop && seg.toStop) {
-                const fromStop = seg.fromStop;
-                const toStop = seg.toStop;
-                puntos = [
-                  {
-                    lat: parseFloat(fromStop.lat || fromStop.latitud),
-                    lng: parseFloat(fromStop.lng || fromStop.longitud)
-                  },
-                  {
-                    lat: parseFloat(toStop.lat || toStop.latitud),
-                    lng: parseFloat(toStop.lng || toStop.longitud)
-                  }
-                ].filter(p => !isNaN(p.lat) && !isNaN(p.lng));
-              } else if (seg.paradaOrigen && seg.paradaDestino) {
-                const fromStop = seg.paradaOrigen;
-                const toStop = seg.paradaDestino;
-                puntos = [
-                  {
-                    lat: parseFloat(fromStop.lat || fromStop.latitud),
-                    lng: parseFloat(fromStop.lng || fromStop.longitud)
-                  },
-                  {
-                    lat: parseFloat(toStop.lat || toStop.latitud),
-                    lng: parseFloat(toStop.lng || toStop.longitud)
-                  }
-                ].filter(p => !isNaN(p.lat) && !isNaN(p.lng));
-              }
-            }
-
-            if (puntos.length === 0) return null;
-
-            // Caminatas en morado claro, buses en el color de la ruta
-            const isWalking = seg.tipo === 'WALK' || seg.tipo === 'walk';
-            const strokeColor = isWalking
-              ? '#a855f7' // purple-500 para caminatas
-              : (seg.ruta?.color || seg.color || '#9333ea'); // Color de la ruta para buses
-
-            return (
-              <Polyline
-                key={`rec-regreso-${recIdx}-${segIdx}`}
-                path={puntos}
-                options={{
-                  strokeColor: strokeColor,
-                  strokeOpacity: 0.6,
-                  strokeWeight: isWalking ? 3 : 4,
-                  zIndex: 25,
-                  geodesic: isWalking // Las caminatas pueden ser geodésicas
-                }}
-              />
-            );
-          });
-        })}
 
       </GoogleMap>
     );
@@ -872,149 +532,24 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
       {/* Panel de Entradas - SIEMPRE VISIBLE */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-slate-800 p-4 rounded-lg border-l-4 border-blue-500">
-          <div className="flex justify-between items-center mb-2">
-            <h4 className="font-bold text-blue-400">Ruta de Ida (Azul)</h4>
-            <button
-              type="button"
-              onClick={() => obtenerRecomendaciones(textoIda, true)}
-              disabled={loading || !textoIda.trim()}
-              className="text-xs bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded transition disabled:opacity-50"
-              title="Obtener recomendaciones de rutas y paradas"
-            >
-              🎯 Recomendar
-            </button>
-          </div>
+          <h4 className="font-bold text-blue-400 mb-2">Ruta de Ida</h4>
           <textarea
             className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-white h-24"
-            placeholder="Origen, Destino (ej: Centro de San Salvador, Aeropuerto)"
+            placeholder="Origen, Punto 1, Punto 2, Destino..."
             value={textoIda}
             onChange={e => setTextoIda(e.target.value)}
           />
         </div>
         <div className="bg-slate-800 p-4 rounded-lg border-l-4 border-red-500">
-          <div className="flex justify-between items-center mb-2">
-            <h4 className="font-bold text-red-400">Ruta de Regreso (Rojo)</h4>
-            <button
-              type="button"
-              onClick={() => obtenerRecomendaciones(textoRegreso, false)}
-              disabled={loading || !textoRegreso.trim()}
-              className="text-xs bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded transition disabled:opacity-50"
-              title="Obtener recomendaciones de rutas y paradas"
-            >
-              🎯 Recomendar
-            </button>
-          </div>
+          <h4 className="font-bold text-red-400 mb-2">Ruta de Regreso</h4>
           <textarea
             className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-white h-24"
-            placeholder="Origen, Destino (ej: Aeropuerto, Centro de San Salvador)"
+            placeholder="Origen, Punto 1, Punto 2, Destino..."
             value={textoRegreso}
             onChange={e => setTextoRegreso(e.target.value)}
           />
         </div>
       </div>
-
-      {/* Panel de Recomendaciones */}
-      {showRecomendaciones && (recomendaciones.length > 0 || recomendacionesRegreso.length > 0) && (
-        <div className="bg-slate-800 p-4 rounded-lg border border-purple-500">
-          <div className="flex justify-between items-center mb-3">
-            <h4 className="font-bold text-purple-400">🎯 Rutas Recomendadas</h4>
-            <button
-              type="button"
-              onClick={() => {
-                setShowRecomendaciones(false);
-                setRecomendaciones([]);
-                setRecomendacionesRegreso([]);
-              }}
-              className="text-xs text-slate-400 hover:text-white"
-            >
-              ✕ Cerrar
-            </button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Recomendaciones Ida */}
-            {recomendaciones.length > 0 && (
-              <div>
-                <h5 className="text-sm font-semibold text-blue-400 mb-2">Ruta de Ida:</h5>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {recomendaciones.map((rec, idx) => (
-                    <div
-                      key={`rec-ida-${idx}`}
-                      className="bg-slate-900 p-3 rounded border border-blue-700 hover:border-blue-500 cursor-pointer transition"
-                      onClick={() => aplicarRecomendacion(rec, true)}
-                    >
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="text-sm font-medium text-white">{rec.resumen || `Opción ${idx + 1}`}</span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            aplicarRecomendacion(rec, true);
-                          }}
-                          className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded"
-                        >
-                          Aplicar
-                        </button>
-                      </div>
-                      <div className="text-xs text-slate-400 space-y-1">
-                        {rec.total_caminata_metros && (
-                          <div>🚶 Caminata: {Math.round(rec.total_caminata_metros)}m</div>
-                        )}
-                        {rec.transbordos !== undefined && (
-                          <div>🔄 Transbordos: {rec.transbordos}</div>
-                        )}
-                        {rec.tarifaTotal && (
-                          <div>💰 Tarifa: ${rec.tarifaTotal}</div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Recomendaciones Regreso */}
-            {recomendacionesRegreso.length > 0 && (
-              <div>
-                <h5 className="text-sm font-semibold text-red-400 mb-2">Ruta de Regreso:</h5>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {recomendacionesRegreso.map((rec, idx) => (
-                    <div
-                      key={`rec-regreso-${idx}`}
-                      className="bg-slate-900 p-3 rounded border border-red-700 hover:border-red-500 cursor-pointer transition"
-                      onClick={() => aplicarRecomendacion(rec, false)}
-                    >
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="text-sm font-medium text-white">{rec.resumen || `Opción ${idx + 1}`}</span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            aplicarRecomendacion(rec, false);
-                          }}
-                          className="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded"
-                        >
-                          Aplicar
-                        </button>
-                      </div>
-                      <div className="text-xs text-slate-400 space-y-1">
-                        {rec.total_caminata_metros && (
-                          <div>🚶 Caminata: {Math.round(rec.total_caminata_metros)}m</div>
-                        )}
-                        {rec.transbordos !== undefined && (
-                          <div>🔄 Transbordos: {rec.transbordos}</div>
-                        )}
-                        {rec.tarifaTotal && (
-                          <div>💰 Tarifa: ${rec.tarifaTotal}</div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Botones de Acción */}
       <div className="flex gap-4">
@@ -1047,19 +582,9 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
           <div className="flex items-center gap-2 mb-1">
             <div className="w-4 h-1 bg-blue-500"></div> <span>Ida</span>
           </div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2">
             <div className="w-4 h-1 bg-red-500"></div> <span>Regreso</span>
           </div>
-          {showRecomendaciones && (
-            <>
-              <div className="flex items-center gap-2 mb-1 mt-2 pt-2 border-t border-slate-700">
-                <div className="w-4 h-1 bg-green-500"></div> <span>Caminata Ida</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-1 bg-purple-500"></div> <span>Caminata Regreso</span>
-              </div>
-            </>
-          )}
         </div>
       </div>
 

@@ -122,7 +122,7 @@ export default function AdminDashboardPage() {
       activa: item.activa === 1 || item.activa === true
     });
 
-    // Si es ruta, cargar sus paradas y construir geometría desde paradas
+    // Si es ruta, cargar sus paradas
     if (activeTab === "rutas") {
       setLoadingStops(true);
       setRouteStops([]);
@@ -130,37 +130,6 @@ export default function AdminDashboardPage() {
         const res = await adminService.getRouteParadas(item.id);
         if (res.success) {
           setRouteStops(res.data);
-          
-          // Construir geometría desde las paradas guardadas
-          const paradasIda = res.data
-            .filter(p => p.direccion === 'ida' || !p.direccion)
-            .sort((a, b) => (a.orden || 0) - (b.orden || 0));
-          const paradasRegreso = res.data
-            .filter(p => p.direccion === 'regreso')
-            .sort((a, b) => (a.orden || 0) - (b.orden || 0));
-          
-          // Construir paths desde las coordenadas de las paradas
-          const pathIda = paradasIda.map(p => ({
-            lat: typeof p.latitud === 'number' ? p.latitud : parseFloat(p.latitud),
-            lng: typeof p.longitud === 'number' ? p.longitud : parseFloat(p.longitud)
-          })).filter(p => !isNaN(p.lat) && !isNaN(p.lng));
-          
-          const pathRegreso = paradasRegreso.map(p => ({
-            lat: typeof p.latitud === 'number' ? p.latitud : parseFloat(p.latitud),
-            lng: typeof p.longitud === 'number' ? p.longitud : parseFloat(p.longitud)
-          })).filter(p => !isNaN(p.lat) && !isNaN(p.lng));
-          
-          // Si hay geometría guardada en item.geometry, usarla, sino construir desde paradas
-          let geometry = item.geometry;
-          if ((!geometry || geometry === '' || geometry === 'null') && (pathIda.length > 0 || pathRegreso.length > 0)) {
-            geometry = JSON.stringify({ ida: pathIda, regreso: pathRegreso });
-          }
-          
-          // Actualizar formData con la geometría
-          setFormData(prev => ({
-            ...prev,
-            geometry: geometry || JSON.stringify({ ida: pathIda, regreso: pathRegreso })
-          }));
         }
       } catch (err) {
         console.error("Error cargando paradas de ruta:", err);
@@ -319,11 +288,15 @@ export default function AdminDashboardPage() {
 
       const payload = {
         ...formData,
-        geometry: geometryJson,
+        // No enviar geometry para evitar errores con GeoJSON en PostgreSQL
+        // Los puntos se guardan en puntos_ruta que es la fuente de verdad
         stops: stopData,
         puntos_ida: puntosIda,
         puntos_regreso: puntosRegreso
       };
+      
+      // Eliminar geometry del payload si existe
+      delete payload.geometry;
 
       // Actualizar estado local
       setFormData(payload);

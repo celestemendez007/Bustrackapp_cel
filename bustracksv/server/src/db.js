@@ -140,6 +140,19 @@ function createSchema() {
     )
   `);
 
+  // Tabla puntos_ruta para almacenar las coordenadas de las rutas
+  db.run(`
+    CREATE TABLE IF NOT EXISTS puntos_ruta (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ruta_id INTEGER NOT NULL,
+      lat REAL NOT NULL,
+      lng REAL NOT NULL,
+      orden INTEGER NOT NULL,
+      tipo TEXT DEFAULT 'ida',
+      FOREIGN KEY (ruta_id) REFERENCES rutas(id) ON DELETE CASCADE
+    )
+  `);
+
   // Tabla para entrenamiento de IA (lugares aprendidos)
   db.run(`
     CREATE TABLE IF NOT EXISTS lugares_aprendidos (
@@ -235,78 +248,18 @@ class SQLitePool {
         stmt.step();
         stmt.free();
 
-        // Obtener el ID del último insert usando una consulta preparada
-        // En SQLite, necesitamos ejecutar last_insert_rowid() inmediatamente después del INSERT
-        // Usar this.db.exec() para obtener el resultado directamente
+        // Obtener el ID del último insert
+        const lastIdStmt = this.db.prepare("SELECT last_insert_rowid() as id");
         let lastId = null;
-        try {
-          // Método 1: Usar exec para obtener el resultado directamente
-          const execResult = this.db.exec("SELECT last_insert_rowid() as id");
-          if (execResult && execResult.length > 0 && execResult[0].values && execResult[0].values.length > 0) {
-            lastId = execResult[0].values[0][0];
-            console.log('Último ID insertado (método exec):', lastId);
-          } else {
-            // Método 2: Usar prepare y step
-            const lastIdStmt = this.db.prepare("SELECT last_insert_rowid() as id");
-            if (lastIdStmt.step()) {
-              const result = lastIdStmt.getAsObject();
-              lastId = result && result.id !== undefined ? result.id : null;
-              console.log('Último ID insertado (método prepare):', lastId);
-            }
-            lastIdStmt.free();
-          }
-        } catch (err) {
-          console.error('Error al obtener last_insert_rowid:', err);
+        if (lastIdStmt.step()) {
+          const result = lastIdStmt.getAsObject();
+          lastId = result.id;
         }
+        lastIdStmt.free();
 
-        // Si no pudimos obtener el ID con last_insert_rowid, intentar obtenerlo de otra forma
-        if (lastId === null || lastId === undefined) {
-          // Como último recurso, hacer un SELECT del último registro insertado usando el primer parámetro (usuario)
-          try {
-            if (params && params.length > 0) {
-              const selectStmt = this.db.prepare("SELECT id FROM usuarios WHERE usuario = ? ORDER BY id DESC LIMIT 1");
-              selectStmt.bind([params[0]]);
-              if (selectStmt.step()) {
-                const result = selectStmt.getAsObject();
-                lastId = result && result.id ? result.id : null;
-                console.log('ID obtenido por SELECT:', lastId);
-              }
-              selectStmt.free();
-            }
-          } catch (err) {
-            console.error('Error al obtener ID por SELECT:', err);
-          }
-        }
-
-        if (lastId !== null && lastId !== undefined) {
-          // Crear el objeto de retorno similar a PostgreSQL
+        if (lastId !== null) {
           rows.push({ [returningField]: lastId });
-          console.log('Retornando fila con ID:', lastId);
-          console.log('📦 Estructura de rows:', JSON.stringify(rows, null, 2));
-        } else {
-          console.error('No se pudo obtener el ID del registro insertado');
-          console.error('lastId es:', lastId);
-          // Intentar una vez más con el método alternativo
-          try {
-            if (params && params.length > 0) {
-              const selectStmt = this.db.prepare("SELECT id FROM usuarios WHERE usuario = ? ORDER BY id DESC LIMIT 1");
-              selectStmt.bind([params[0]]);
-              if (selectStmt.step()) {
-                const result = selectStmt.getAsObject();
-                const altId = result && result.id ? result.id : null;
-                if (altId !== null) {
-                  rows.push({ [returningField]: altId });
-                  console.log('ID obtenido por método alternativo:', altId);
-                }
-              }
-              selectStmt.free();
-            }
-          } catch (err) {
-            console.error('Error en método alternativo final:', err);
-          }
         }
-
-        console.log('Resultado final del query:', JSON.stringify({ rows, rowCount: rows.length }, null, 2));
       } else {
         // Para INSERT/UPDATE/DELETE sin RETURNING, usar step()
         const stmt = this.db.prepare(sqlText);
@@ -333,14 +286,9 @@ class SQLitePool {
       }
 
       // Guardar cambios después de cada query que modifica datos
-      // OPTIMIZACIÓN: Deshabilitado para permitir transacciones masivas sin I/O bloqueante
-      /*
-      if (isInsert ||
-        text.trim().toUpperCase().startsWith('UPDATE') ||
-        text.trim().toUpperCase().startsWith('DELETE')) {
+      if (isInsert || isUpdate || isDelete) {
         saveDatabase();
       }
-      */
 
       return { rows, rowCount: rows.length };
     } catch (error) {
@@ -380,8 +328,8 @@ async function getPool() {
 export const testConnection = async () => {
   try {
     const poolInstance = await getPool();
-    const result = await poolInstance.query('SELECT datetime("now") as now');
-    console.log('Conexión a la base de datos exitosa:', result.rows[0]);
+    await poolInstance.query('SELECT 1');
+    console.log('✅ Conexión a la base de datos exitosa');
     return true;
   } catch (err) {
     console.error('Error al conectar con la base de datos:', err);
@@ -414,4 +362,3 @@ process.on('SIGINT', () => {
   }
   process.exit(0);
 });
-

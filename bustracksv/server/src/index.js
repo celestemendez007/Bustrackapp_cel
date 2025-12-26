@@ -24,64 +24,11 @@ import express from "express";
 import cors from "cors";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-
-// Detectar si usar cloud o local (prioridad: DATABASE_URL > DB_HOST > local)
-const useCloud = !!(process.env.DATABASE_URL || process.env.DB_HOST);
-
-// Helper para comparaciones booleanas según la base de datos
-const activaTrue = useCloud ? 'TRUE' : '1';
-const activaFalse = useCloud ? 'FALSE' : '0';
-
-// Importar base de datos según el modo (PostgreSQL para cloud, SQLite para local)
-let pool, testConnection, ensureIndexes = null;
-
-if (useCloud) {
-  // Modo Cloud: Usar PostgreSQL
-  const dbCloud = await import("./db-cloud.js");
-  pool = dbCloud.pool;
-  testConnection = dbCloud.testConnection;
-  ensureIndexes = dbCloud.ensureIndexes;
-  const ensureSchema = dbCloud.ensureSchema;
-  console.log('☁️ Modo Cloud: Usando PostgreSQL');
-  
-  // Asegurar que el esquema existe
-  if (ensureSchema) {
-    await ensureSchema();
-  }
-} else {
-  // Modo Local: Usar SQLite
-  const dbLocal = await import("./db.js");
-  pool = dbLocal.pool;
-  testConnection = dbLocal.testConnection;
-  console.log('💾 Modo Local: Usando SQLite');
-}
-
+import { pool, testConnection } from "./db.js";
 import { Client } from "@googlemaps/google-maps-services-js";
 import RouteFinderService from "./services/RouteFinderService.js";
 import RouteGenerationService from "./services/RouteGenerationService.js";
 import GraphRouteService from "./services/GraphRouteService.js";
-
-// Importar middleware de seguridad (opcional, funciona sin él)
-let securityMiddleware = null;
-let redisCache = null;
-
-// Cargar middleware de seguridad de forma asíncrona (no bloquea)
-import("./middleware/security.js").then(security => {
-  securityMiddleware = security;
-}).catch(() => {
-  // Middleware no disponible, usar configuración básica
-});
-
-// Intentar cargar Redis (opcional, no bloquea)
-import("./cache/redis.js").then(redis => {
-  redisCache = redis;
-  // Inicializar Redis de forma asíncrona
-  redis.initRedis().catch(() => {
-    // Redis no disponible, continuar sin él
-  });
-}).catch(() => {
-  // Redis no disponible, continuar sin caché
-});
 
 // Para Node.js < 18, usar node-fetch si es necesario
 let fetch;
@@ -174,43 +121,8 @@ const decodePolyline = (encoded) => {
 // ===============================
 // 🔹 MIDDLEWARE
 // ===============================
-
-// Request ID y logging (si está disponible)
-if (securityMiddleware?.requestIdMiddleware) {
-  app.use(securityMiddleware.requestIdMiddleware);
-  app.use(securityMiddleware.requestLogger);
-}
-
-// CORS mejorado (si está disponible, sino usar básico)
-if (securityMiddleware?.corsConfig) {
-  app.use(securityMiddleware.corsConfig);
-} else {
-  app.use(cors({
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
-    credentials: true
-  }));
-}
-
-// Helmet para headers de seguridad (si está disponible)
-if (securityMiddleware?.helmetConfig) {
-  app.use(securityMiddleware.helmetConfig);
-}
-
-// Validación de Content-Type (si está disponible)
-if (securityMiddleware?.validateContentType) {
-  app.use(securityMiddleware.validateContentType);
-}
-
+app.use(cors());
 app.use(express.json({ limit: '50mb' }));
-
-// Rate limiting (si está disponible)
-if (securityMiddleware?.rateLimiters) {
-  app.use('/api/', securityMiddleware.rateLimiters.general);
-  app.use('/login', securityMiddleware.rateLimiters.auth);
-  app.use('/register', securityMiddleware.rateLimiters.auth);
-  app.use('/api/buscar-mejor-ruta', securityMiddleware.rateLimiters.search);
-  app.use('/api/recomendar-ruta', securityMiddleware.rateLimiters.search);
-}
 
 // Middleware para validar JWT
 const authenticateToken = (req, res, next) => {
@@ -255,180 +167,6 @@ const requireAdmin = async (req, res, next) => {
 // ===============================
 // 🔹 RUTAS DE AUTENTICACIÓN
 // ===============================
-
-// Endpoint temporal para listar usuarios admin (solo para debugging)
-app.get("/setup/list-admins", async (req, res) => {
-  try {
-    const result = await pool.query(
-      "SELECT id, usuario, email, rol, activo FROM usuarios WHERE rol IN ('admin', 'gobierno') ORDER BY fecha_creacion"
-    );
-    return res.json({
-      success: true,
-      count: result.rows.length,
-      usuarios: result.rows.map(u => ({
-        id: u.id,
-        usuario: u.usuario,
-        email: u.email,
-        rol: u.rol,
-        activo: u.activo
-      }))
-    });
-  } catch (error) {
-    console.error("Error al listar admins:", error);
-    return res.status(500).json({ 
-      success: false,
-      message: "Error al listar usuarios admin",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// Endpoint temporal para verificar/crear esquema completo (solo para setup inicial)
-app.post("/setup/ensure-schema", async (req, res) => {
-  try {
-    if (useCloud) {
-      const dbCloud = await import("./db-cloud.js");
-      if (dbCloud.ensureSchema) {
-        const result = await dbCloud.ensureSchema();
-        return res.json({
-          success: result,
-          message: result ? "Esquema verificado/creado exitosamente" : "Error al crear esquema"
-        });
-      }
-      return res.status(500).json({ success: false, message: "ensureSchema no disponible" });
-    } else {
-      return res.json({ success: false, message: "Este endpoint solo funciona en modo cloud" });
-    }
-  } catch (error) {
-    console.error("Error en ensure-schema:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Error al crear esquema",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// Endpoint temporal para resetear contraseña de un usuario admin (solo para setup inicial)
-app.post("/setup/reset-admin-password", async (req, res) => {
-  try {
-    const { usuario } = req.body;
-    
-    if (!usuario) {
-      return res.status(400).json({
-        success: false,
-        message: "Se requiere el nombre de usuario"
-      });
-    }
-
-    // Verificar que el usuario existe y es admin
-    const userResult = await pool.query(
-      "SELECT id, usuario, rol FROM usuarios WHERE usuario = $1 AND rol IN ('admin', 'gobierno')",
-      [usuario]
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Usuario admin no encontrado"
-      });
-    }
-
-    // Nueva contraseña: Gobierno2025!
-    const newPassword = 'Gobierno2025!';
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    // Actualizar contraseña
-    await pool.query(
-      "UPDATE usuarios SET password = $1 WHERE id = $2",
-      [hashedPassword, userResult.rows[0].id]
-    );
-
-    return res.json({
-      success: true,
-      message: "Contraseña reseteada exitosamente",
-      usuario: userResult.rows[0].usuario,
-      password: newPassword,
-      rol: userResult.rows[0].rol
-    });
-  } catch (error) {
-    console.error("Error al resetear contraseña:", error);
-    return res.status(500).json({ 
-      success: false,
-      message: "Error al resetear contraseña",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// Endpoint temporal para crear el primer usuario admin (solo si no existe ningún admin)
-app.post("/setup/admin", async (req, res) => {
-  try {
-    // Verificar si ya existe algún usuario admin
-    const existingAdmins = await pool.query(
-      "SELECT id FROM usuarios WHERE rol IN ('admin', 'gobierno')"
-    );
-
-    if (existingAdmins.rows.length > 0) {
-      return res.status(403).json({ 
-        message: "Ya existen usuarios administradores. Use el panel de administración para crear más usuarios.",
-        success: false 
-      });
-    }
-
-    // Credenciales del primer admin
-    const usuario = 'admin_gobierno';
-    const password = 'Gobierno2025!';
-    const email = 'admin@gobierno.sv';
-    const nombre_completo = 'Administrador de Gobierno';
-    const rol = 'admin';
-
-    // Verificar si el usuario ya existe
-    const existingUser = await pool.query(
-      "SELECT id FROM usuarios WHERE usuario = $1 OR email = $2",
-      [usuario, email]
-    );
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    if (existingUser.rows.length > 0) {
-      // Actualizar el usuario existente a admin
-      const existing = existingUser.rows[0];
-      await pool.query(
-        "UPDATE usuarios SET password = $1, rol = $2, email = $3, nombre_completo = $4, usuario = $5 WHERE id = $6",
-        [hashedPassword, rol, email, nombre_completo, usuario, existing.id]
-      );
-      return res.json({
-        success: true,
-        message: "Usuario administrador actualizado exitosamente",
-        usuario: usuario,
-        password: password,
-        rol: rol
-      });
-    } else {
-      // Crear nuevo usuario admin
-      await pool.query(
-        "INSERT INTO usuarios (usuario, password, email, nombre_completo, rol, activo) VALUES ($1, $2, $3, $4, $5, $6)",
-        [usuario, hashedPassword, email, nombre_completo, rol, true]
-      );
-      return res.json({
-        success: true,
-        message: "Usuario administrador creado exitosamente",
-        usuario: usuario,
-        password: password,
-        rol: rol,
-        url: "/admin/login"
-      });
-    }
-  } catch (error) {
-    console.error("Error al crear usuario administrador:", error);
-    return res.status(500).json({ 
-      success: false,
-      message: "Error al crear usuario administrador",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
 
 // Registrar usuario
 app.post("/register", async (req, res) => {
@@ -498,11 +236,11 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Contraseña incorrecta" });
     }
 
-    // Actualizar último acceso (compatible con PostgreSQL y SQLite)
-    const updateQuery = useCloud 
-      ? "UPDATE usuarios SET ultimo_acceso = NOW() WHERE id = $1"
-      : "UPDATE usuarios SET ultimo_acceso = datetime('now') WHERE id = $1";
-    await pool.query(updateQuery, [user.id]);
+    // Actualizar último acceso
+    await pool.query(
+      "UPDATE usuarios SET ultimo_acceso = datetime('now') WHERE id = $1",
+      [user.id]
+    );
 
     const token = jwt.sign(
       { id: user.id, usuario: user.usuario, rol: user.rol || 'usuario' },
@@ -519,11 +257,7 @@ app.post("/login", async (req, res) => {
     });
   } catch (err) {
     console.error("Error en login:", err);
-    console.error("Stack trace:", err.stack);
-    res.status(500).json({ 
-      message: "Error en el servidor",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
+    res.status(500).json({ message: "Error en el servidor" });
   }
 });
 
@@ -729,26 +463,13 @@ app.put("/perfil/password", authenticateToken, async (req, res) => {
 // 🔹 RUTAS BÁSICAS (SIN POSTGIS)
 // ===============================
 
-// Obtener todas las rutas (simplificado) - CON CACHÉ
+// Obtener todas las rutas (simplificado)
 app.get("/api/rutas", async (req, res) => {
   try {
-    // Intentar obtener del caché Redis (si está disponible)
-    if (redisCache?.routeCache) {
-      try {
-        const cached = await redisCache.routeCache.getRoutes();
-        if (cached) {
-          console.log('📦 Rutas desde caché Redis');
-          return res.json(cached);
-        }
-      } catch (cacheErr) {
-        console.warn('Error al obtener de caché:', cacheErr.message);
-      }
-    }
-
     const result = await pool.query(`
       SELECT id, nombre, descripcion, color, numero_ruta, empresa, tipo, tarifa, geometry
       FROM rutas
-      WHERE activa = ${activaTrue}
+      WHERE activa = 1
       ORDER BY numero_ruta
     `);
 
@@ -778,16 +499,6 @@ app.get("/api/rutas", async (req, res) => {
       return { ...r, geometry: geom };
     });
 
-    // Guardar en caché Redis (si está disponible)
-    if (redisCache?.routeCache) {
-      try {
-        await redisCache.routeCache.setRoutes(processed);
-        console.log('💾 Rutas guardadas en caché Redis');
-      } catch (cacheErr) {
-        console.warn('Error al guardar en caché:', cacheErr.message);
-      }
-    }
-
     res.json(processed);
   } catch (err) {
     console.error("Error al obtener rutas:", err);
@@ -808,7 +519,7 @@ function calcularDistancia(lat1, lon1, lat2, lon2) {
   return R * c; // Retorna metros
 }
 
-// --- ALGORITMO PRINCIPAL DE BÚSQUEDA --- CON CACHÉ
+// --- ALGORITMO PRINCIPAL DE BÚSQUEDA ---
 app.post('/api/buscar-mejor-ruta', async (req, res) => {
   // Aceptamos tanto formato anidado (cliente viejo) como plano (cliente nuevo)
   const { origen, destino, latOrigen, lngOrigen, latDestino, lngDestino } = req.body;
@@ -824,54 +535,20 @@ app.post('/api/buscar-mejor-ruta', async (req, res) => {
   }
 
   try {
-    // Intentar obtener del caché Redis (si está disponible)
-    if (redisCache?.searchCache) {
-      try {
-        const cached = await redisCache.searchCache.getRouteSearch(latA, lngA, latB, lngB);
-        if (cached) {
-          console.log('📦 Búsqueda desde caché Redis');
-          return res.json(cached);
-        }
-      } catch (cacheErr) {
-        console.warn('Error al obtener de caché:', cacheErr.message);
-      }
-    }
-
     // Usar el nuevo servicio de Grafos (Dijkstra)
     const result = await GraphRouteService.findBestRoute(latA, lngA, latB, lngB);
 
     if (!result) {
-      const emptyResult = { success: true, recomendaciones: [] };
-      // Guardar en caché incluso si no hay resultados
-      if (redisCache?.searchCache) {
-        try {
-          await redisCache.searchCache.setRouteSearch(latA, lngA, latB, lngB, emptyResult);
-        } catch (cacheErr) {
-          // Ignorar errores de caché
-        }
-      }
-      return res.json(emptyResult);
+      return res.json({ success: true, recomendaciones: [] });
     }
 
     // Devolver array con la mejor ruta encontrada
     // El frontend espera 'recomendaciones' array
     console.log("Ruta encontrada por Grafo:", result.recomendacion.resumen);
-    const response = {
+    res.json({
       success: true,
       recomendaciones: [result.recomendacion]
-    };
-
-    // Guardar en caché Redis (si está disponible)
-    if (redisCache?.searchCache) {
-      try {
-        await redisCache.searchCache.setRouteSearch(latA, lngA, latB, lngB, response);
-        console.log('💾 Búsqueda guardada en caché Redis');
-      } catch (cacheErr) {
-        console.warn('Error al guardar en caché:', cacheErr.message);
-      }
-    }
-
-    res.json(response);
+    });
 
   } catch (err) {
     console.error("Error en búsqueda por grafo:", err);
@@ -885,21 +562,20 @@ app.get("/api/rutas/:id/paradas", async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
-        p.id, p.codigo, p.nombre, p.descripcion, p.direccion as parada_direccion, 
+        p.id, p.codigo, p.nombre, p.descripcion, p.direccion, 
         p.latitud, p.longitud, p.zona, p.tipo,
-        pr.orden, pr.tiempo_estimado_minutos, pr.direccion
+        pr.orden, pr.tiempo_estimado_minutos
       FROM paradas p
       JOIN parada_ruta pr ON p.id = pr.id_parada
-      WHERE pr.id_ruta = $1 AND p.activa = ${activaTrue}
-      ORDER BY COALESCE(pr.direccion, 'ida'), pr.orden ASC
+      WHERE pr.id_ruta = $1 AND p.activa = 1
+      ORDER BY pr.orden ASC
     `, [id]);
 
     res.json(result.rows.map(p => ({
       ...p,
       latitud: parseFloat(p.latitud),
       longitud: parseFloat(p.longitud),
-      orden: parseInt(p.orden),
-      direccion: p.direccion || 'ida' // direccion de parada_ruta (ida/regreso)
+      orden: parseInt(p.orden)
     })));
   } catch (err) {
     console.error(`Error al obtener paradas de ruta ${id}:`, err);
@@ -915,7 +591,7 @@ app.get("/api/paradas", async (req, res) => {
     let query = `
       SELECT id, codigo, nombre, descripcion, direccion, latitud, longitud, zona, tipo
       FROM paradas
-      WHERE activa = ${activaTrue}
+      WHERE activa = 1
     `;
     const params = [];
 
@@ -942,7 +618,7 @@ app.get("/api/paradas-cercanas", async (req, res) => {
   try {
     const latNum = parseFloat(lat);
     const lngNum = parseFloat(lng);
-    const result = await pool.query(`SELECT * FROM paradas WHERE activa = ${activaTrue}`);
+    const result = await pool.query("SELECT * FROM paradas WHERE activa = 1");
 
     // Filtro simple por distancia (Haversine)
     const filtered = result.rows.map(p => {
@@ -1014,9 +690,77 @@ app.post('/admin/guardar-ruta', async (req, res) => {
 });
 
 // --- API: ACTUALIZAR RUTA (Ida y Regreso) ---
-// ENDPOINT ANTIGUO ELIMINADO - Usaba tabla puntos_ruta que no existe
-// El endpoint correcto está más abajo (línea ~1564) que usa parada_ruta
-// Se eliminó completamente para evitar conflictos de rutas duplicadas
+app.put('/admin/rutas/:id', async (req, res) => {
+  const { id } = req.params;
+  const { nombre, puntos_ida, puntos_regreso } = req.body;
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN'); // Iniciar transacción segura
+
+    // 1. Actualizar datos básicos
+    if (nombre) {
+      await client.query('UPDATE rutas SET nombre = $1 WHERE id = $2', [nombre, id]);
+    }
+
+    // 2. BORRAR puntos viejos (limpieza para no duplicar líneas)
+    await client.query('DELETE FROM puntos_ruta WHERE ruta_id = $1', [id]);
+
+    // 3. INSERTAR PUNTOS DE IDA (Línea Azul) - OPTIMIZADO: BATCH INSERT
+    if (puntos_ida && puntos_ida.length > 0) {
+      const CHUNK_SIZE = 50;
+      let orden = 1;
+      for (let i = 0; i < puntos_ida.length; i += CHUNK_SIZE) {
+        const chunk = puntos_ida.slice(i, i + CHUNK_SIZE);
+        const values = [];
+        const placeholders = [];
+        chunk.forEach((p, idx) => {
+          // ($1, $2, $3, $4, $5), ($6, $7...)
+          const offset = idx * 5;
+          placeholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5})`);
+          values.push(id, p.lat, p.lng, orden++, 'ida');
+        });
+
+        const sql = `INSERT INTO puntos_ruta (ruta_id, lat, lng, orden, tipo) VALUES ${placeholders.join(', ')}`;
+        await client.query(sql, values);
+      }
+    }
+
+    // 4. INSERTAR PUNTOS DE REGRESO (Línea Roja) - OPTIMIZADO
+    if (puntos_regreso && puntos_regreso.length > 0) {
+      const CHUNK_SIZE = 50;
+      let orden = 1;
+      for (let i = 0; i < puntos_regreso.length; i += CHUNK_SIZE) {
+        const chunk = puntos_regreso.slice(i, i + CHUNK_SIZE);
+        const values = [];
+        const placeholders = [];
+        chunk.forEach((p, idx) => {
+          const offset = idx * 5;
+          placeholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5})`);
+          values.push(id, p.lat, p.lng, orden++, 'regreso');
+        });
+
+        const sql = `INSERT INTO puntos_ruta (ruta_id, lat, lng, orden, tipo) VALUES ${placeholders.join(', ')}`;
+        await client.query(sql, values);
+      }
+    }
+
+    await client.query('COMMIT'); // Guardar cambios
+
+    // Guardar en disco explícitamente después de la carga masiva
+    await pool.save();
+
+    res.json({ success: true, message: "Trayectoria actualizada" });
+
+  } catch (error) {
+    await client.query('ROLLBACK'); // Cancelar si falla
+    console.error(error);
+    res.status(500).json({ error: "Error al guardar en base de datos" });
+  } finally {
+    client.release();
+  }
+});
 
 // Buscar rutas cercanas (Simplificado)
 app.get("/api/rutas-cercanas", async (req, res) => {
@@ -1027,7 +771,7 @@ app.get("/api/rutas-cercanas", async (req, res) => {
   try {
     const latNum = parseFloat(lat);
     const lngNum = parseFloat(lng);
-    const result = await pool.query(`SELECT * FROM paradas WHERE activa = ${activaTrue}`);
+    const result = await pool.query("SELECT * FROM paradas WHERE activa = 1");
     const nearbyStops = result.rows.map(p => {
       const R = 6371000;
       const dLat = (parseFloat(p.latitud) - latNum) * Math.PI / 180;
@@ -1045,7 +789,7 @@ app.get("/api/rutas-cercanas", async (req, res) => {
     const rutasResult = await pool.query(`
        SELECT DISTINCT r.* FROM rutas r
        JOIN parada_ruta pr ON r.id = pr.id_ruta
-       WHERE pr.id_parada IN (${nearbyStops.join(',')}) AND r.activa = ${activaTrue}
+       WHERE pr.id_parada IN (${nearbyStops.join(',')}) AND r.activa = 1
        LIMIT ${parseInt(limite)}
      `);
     res.json({ success: true, rutas: rutasResult.rows });
@@ -1148,7 +892,7 @@ app.post("/api/buscar-rutas", async (req, res) => {
       JOIN parada_ruta pr2 ON r.id = pr2.id_ruta
       JOIN paradas p1 ON pr1.id_parada = p1.id
       JOIN paradas p2 ON pr2.id_parada = p2.id
-      WHERE r.activa = ${activaTrue}
+      WHERE r.activa = 1
         AND pr1.id_parada = $1
         AND pr2.id_parada = $2
         AND pr1.orden < pr2.orden
@@ -1452,55 +1196,34 @@ app.post("/admin/rutas", authenticateToken, requireAdmin, async (req, res) => {
     const result = await pool.query(`
       INSERT INTO rutas (nombre, descripcion, color, numero_ruta, empresa, tipo, tarifa, 
                         horario_inicio, horario_fin, frecuencia_minutos, activa, geometry)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 1, $11)
       RETURNING *
-    `, [
-      nombre, 
-      descripcion || null, 
-      color || '#0066CC', 
-      numero_ruta, 
-      empresa || null, 
-      tipo || 'Bus',
-      tarifa || 0.25, 
-      horario_inicio || '05:00:00', 
-      horario_fin || '21:00:00', 
-      frecuencia_minutos || 15, 
-      true, // activa
-      geometryFormatted
-    ]);
-
-    // Invalidar caché de rutas después de crear
-    if (redisCache?.routeCache) {
-      try {
-        await redisCache.routeCache.invalidate();
-      } catch (cacheErr) {
-        // Ignorar errores de caché
-      }
-    }
+    `, [nombre, descripcion || null, color || '#0066CC', numero_ruta, empresa || null, tipo || 'Bus',
+      tarifa || 0.25, horario_inicio || '05:00:00', horario_fin || '21:00:00', frecuencia_minutos || 15, geometryFormatted]);
 
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {
     console.error("Error al crear ruta:", err);
-    console.error("Stack trace:", err.stack);
     if (err.message.includes('UNIQUE')) {
       return res.status(409).json({ success: false, message: "El número de ruta ya existe" });
     }
-    // Incluir más detalles del error en desarrollo
-    const errorMessage = process.env.NODE_ENV === 'development' 
-      ? `Error al crear ruta: ${err.message}` 
-      : "Error al crear ruta";
-    res.status(500).json({ 
-      success: false, 
-      message: errorMessage,
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
+    res.status(500).json({ success: false, message: "Error al crear ruta" });
   }
 });
 
 // Actualizar ruta
 app.put("/admin/rutas/:id", authenticateToken, requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const { nombre, descripcion, color, numero_ruta, empresa, tipo, tarifa, horario_inicio, horario_fin, frecuencia_minutos, activa, geometry, stops } = req.body;
+  // Extraer campos del body, ignorando geometry explícitamente
+  const { nombre, descripcion, color, numero_ruta, empresa, tipo, tarifa, horario_inicio, horario_fin, frecuencia_minutos, activa, stops, puntos_ida, puntos_regreso } = req.body;
+  
+  // Ignorar geometry si viene en el body para evitar errores con GeoJSON
+  // const { geometry } = req.body; // No se usa
+
+  console.log('PUT /admin/rutas/:id recibido');
+  console.log('ID:', id);
+  console.log('puntos_ida:', puntos_ida?.length || 0, 'puntos');
+  console.log('puntos_regreso:', puntos_regreso?.length || 0, 'puntos');
 
   try {
     const updates = [];
@@ -1517,55 +1240,134 @@ app.put("/admin/rutas/:id", authenticateToken, requireAdmin, async (req, res) =>
     if (horario_inicio !== undefined) { updates.push(`horario_inicio = $${paramCount}`); values.push(horario_inicio); paramCount++; }
     if (horario_fin !== undefined) { updates.push(`horario_fin = $${paramCount}`); values.push(horario_fin); paramCount++; }
     if (frecuencia_minutos !== undefined) { updates.push(`frecuencia_minutos = $${paramCount}`); values.push(frecuencia_minutos); paramCount++; }
-    if (activa !== undefined) { 
-      // En PostgreSQL, activa es BOOLEAN, usar true/false directamente
-      updates.push(`activa = $${paramCount}`); 
-      values.push(activa === true || activa === 1 || activa === 'true'); 
-      paramCount++; 
-    }
-    if (geometry !== undefined) {
-      if (geometry && typeof geometry === 'string' && geometry.trim()) {
-        try {
-          const parsed = JSON.parse(geometry);
-          updates.push(`geometry = $${paramCount}`);
-          values.push(JSON.stringify(parsed));
-          paramCount++;
-        } catch (err) {
-          return res.status(400).json({ success: false, message: "Formato de coordenadas inválido. Debe ser JSON válido." });
-        }
-      } else if (geometry && typeof geometry === 'object') {
-        // Si es un objeto, stringificarlo
-        updates.push(`geometry = $${paramCount}`);
-        values.push(JSON.stringify(geometry));
-        paramCount++;
-      } else {
-        // null, undefined, o string vacío
-        updates.push(`geometry = $${paramCount}`);
-        values.push(null);
-        paramCount++;
-      }
-    }
+    if (activa !== undefined) { updates.push(`activa = $${paramCount}`); values.push(activa ? 1 : 0); paramCount++; }
+    // Omitir actualizar geometry para evitar errores con GeoJSON
+    // Los puntos reales se guardan en puntos_ruta, que es la fuente de verdad
+    // El campo geometry se puede actualizar por separado si es necesario
+    // if (geometry !== undefined && geometry !== null) {
+    //   // Comentado para evitar errores "unknown GeoJSON type" en PostgreSQL
+    // }
 
-    // Validar que haya algo que actualizar
+    // Si no hay updates, agregar al menos fecha_actualizacion
+    // Usar datetime('now') para SQLite (funciona en ambos)
     if (updates.length === 0) {
-      return res.status(400).json({ success: false, message: "No hay campos para actualizar" });
+      updates.push(`fecha_actualizacion = datetime('now')`);
+    } else {
+      updates.push(`fecha_actualizacion = datetime('now')`);
     }
 
-    // Agregar fecha_actualizacion (no usa parámetro)
-    updates.push(useCloud 
-      ? `fecha_actualizacion = NOW()`
-      : `fecha_actualizacion = datetime('now')`);
-    
-    // Agregar el id al final de los valores para el WHERE
+    // Agregar el ID al final de los valores para el WHERE
     values.push(id);
+    const idParamIndex = values.length;
 
-    const result = await pool.query(
-      `UPDATE rutas SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`,
-      values
-    );
+    const updateSql = `UPDATE rutas SET ${updates.join(', ')} WHERE id = $${idParamIndex}`;
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: "Ruta no encontrada" });
+    console.log('Ejecutando UPDATE:', updateSql);
+    console.log('Con valores:', values.length, 'parámetros');
+
+    // Ejecutar el UPDATE
+    try {
+      await pool.query(updateSql, values);
+      console.log('UPDATE ejecutado correctamente');
+      
+      // Guardar la base de datos después del UPDATE
+      if (pool.save) {
+        await pool.save();
+        console.log('Base de datos guardada después del UPDATE');
+      }
+    } catch (updateError) {
+      console.error('Error en UPDATE:', updateError);
+      console.error('SQL:', updateSql);
+      console.error('Values:', values);
+      throw updateError;
+    }
+
+    // Obtener el resultado actualizado después de todos los cambios
+    let result;
+    try {
+      result = await pool.query(
+        `SELECT * FROM rutas WHERE id = $1`,
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ success: false, message: "Ruta no encontrada" });
+      }
+    } catch (selectError) {
+      console.error('Error obteniendo ruta actualizada:', selectError);
+      throw selectError;
+    }
+
+    // Guardar puntos_ruta si se proporcionan (para el sistema de recomendaciones)
+    if (puntos_ida || puntos_regreso) {
+      try {
+        console.log(`Guardando puntos_ruta: ida=${puntos_ida?.length || 0}, regreso=${puntos_regreso?.length || 0}`);
+        
+        // Eliminar puntos existentes
+        await pool.query('DELETE FROM puntos_ruta WHERE ruta_id = $1', [id]);
+        console.log('Puntos existentes eliminados');
+
+        // Guardar puntos de ida
+        if (puntos_ida && Array.isArray(puntos_ida) && puntos_ida.length > 0) {
+          let orden = 1;
+          let savedCount = 0;
+          for (const p of puntos_ida) {
+            const lat = parseFloat(p?.lat || p?.latitud);
+            const lng = parseFloat(p?.lng || p?.longitud);
+            
+            if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+              try {
+                await pool.query(
+                  'INSERT INTO puntos_ruta (ruta_id, lat, lng, orden, tipo) VALUES ($1, $2, $3, $4, $5)',
+                  [id, lat, lng, orden++, 'ida']
+                );
+                savedCount++;
+              } catch (insertError) {
+                console.error(`Error insertando punto ida ${orden - 1}:`, insertError);
+              }
+            } else {
+              console.warn(`Punto inválido en ida:`, p);
+            }
+          }
+          console.log(`Guardados ${savedCount} puntos de ida`);
+        }
+
+        // Guardar puntos de regreso
+        if (puntos_regreso && Array.isArray(puntos_regreso) && puntos_regreso.length > 0) {
+          let orden = 1;
+          let savedCount = 0;
+          for (const p of puntos_regreso) {
+            const lat = parseFloat(p?.lat || p?.latitud);
+            const lng = parseFloat(p?.lng || p?.longitud);
+            
+            if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+              try {
+                await pool.query(
+                  'INSERT INTO puntos_ruta (ruta_id, lat, lng, orden, tipo) VALUES ($1, $2, $3, $4, $5)',
+                  [id, lat, lng, orden++, 'regreso']
+                );
+                savedCount++;
+              } catch (insertError) {
+                console.error(`Error insertando punto regreso ${orden - 1}:`, insertError);
+              }
+            } else {
+              console.warn(`Punto inválido en regreso:`, p);
+            }
+          }
+          console.log(`Guardados ${savedCount} puntos de regreso`);
+        }
+
+        // Guardar la base de datos después de insertar todos los puntos
+        if (pool.save) {
+          await pool.save();
+          console.log('Base de datos guardada después de insertar puntos');
+        }
+      } catch (pointsError) {
+        console.error("Error guardando puntos_ruta:", pointsError);
+        console.error("Stack:", pointsError.stack);
+        // No hacer rollback aquí, solo loggear el error para que se guarde la geometry
+        // Los puntos_ruta son opcionales, la geometry es lo principal
+      }
     }
 
     // Procesar Paradas si se proporcionan
@@ -1593,7 +1395,7 @@ app.put("/admin/rutas/:id", authenticateToken, requireAdmin, async (req, res) =>
             } else {
               // Crear nueva parada
               const newStop = await pool.query(
-                `INSERT INTO paradas (nombre, latitud, longitud, direccion, activa, tipo) VALUES ($1, $2, $3, $4, ${useCloud ? 'TRUE' : '1'}, 'Virtual') RETURNING id`,
+                "INSERT INTO paradas (nombre, latitud, longitud, direccion, activa, tipo) VALUES ($1, $2, $3, $4, 1, 'Virtual') RETURNING id",
                 [stop.nombre || stop.address || 'Parada', stop.lat, stop.lng, stop.address || '']
               );
               stopId = newStop.rows[0].id;
@@ -1614,27 +1416,23 @@ app.put("/admin/rutas/:id", authenticateToken, requireAdmin, async (req, res) =>
       await processDirection(stops.regreso, 'regreso');
     }
 
-    // Invalidar caché de rutas después de actualizar
-    if (redisCache?.routeCache) {
-      try {
-        await redisCache.routeCache.invalidate();
-        console.log('🗑️ Caché de rutas invalidado después de actualización');
-      } catch (cacheErr) {
-        console.warn('Error al invalidar caché:', cacheErr.message);
-      }
+    // Obtener el resultado final después de todos los cambios
+    const finalResult = await pool.query(
+      `SELECT * FROM rutas WHERE id = $1`,
+      [id]
+    );
+
+    if (finalResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Ruta no encontrada después de actualizar" });
     }
 
-    res.json({ success: true, data: result.rows[0] });
+    res.json({ success: true, data: finalResult.rows[0] });
   } catch (err) {
     console.error("Error al actualizar ruta:", err);
-    console.error("Stack trace:", err.stack);
-    const errorMessage = process.env.NODE_ENV === 'development' 
-      ? `Error al actualizar ruta: ${err.message}` 
-      : "Error al actualizar ruta";
+    console.error("Error details:", err.message, err.stack);
     res.status(500).json({ 
       success: false, 
-      message: errorMessage,
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      message: "Error al actualizar ruta: " + (err.message || "Error desconocido") 
     });
   }
 });
@@ -1652,15 +1450,6 @@ app.delete("/admin/rutas/:id", authenticateToken, requireAdmin, async (req, res)
 
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Ruta no encontrada" });
-    }
-
-    // Invalidar caché de rutas después de eliminar
-    if (redisCache?.routeCache) {
-      try {
-        await redisCache.routeCache.invalidate();
-      } catch (cacheErr) {
-        // Ignorar errores de caché
-      }
     }
 
     res.json({ success: true, message: "Ruta eliminada exitosamente" });
@@ -2043,7 +1832,7 @@ app.get("/api/routes", async (req, res) => {
     const result = await pool.query(`
       SELECT id, nombre, descripcion, color, numero_ruta, empresa, tipo, tarifa, geometry
       FROM rutas
-      WHERE activa = ${activaTrue}
+      WHERE activa = 1
       ORDER BY numero_ruta
     `);
 
@@ -2068,49 +1857,22 @@ app.get("/api/routes", async (req, res) => {
 // ===============================
 const startServer = async () => {
   try {
-    console.log('🔍 Probando conexión a la base de datos...');
+    console.log('Probando conexión a la base de datos...');
     const dbConnected = await testConnection();
 
     if (!dbConnected) {
-      console.error('❌ No se pudo conectar a la base de datos.');
+      console.error('No se pudo conectar a la base de datos.');
       process.exit(1);
     }
 
-    // Inicializar índices si está en modo cloud
-    if (useCloud && ensureIndexes && typeof ensureIndexes === 'function') {
-      try {
-        await ensureIndexes();
-      } catch (e) {
-        console.warn('⚠️ No se pudieron crear índices optimizados:', e.message);
-      }
-    }
-
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log('\n🚀 ========================================');
-      console.log(`   Servidor BusTrackSV iniciado`);
-      console.log(`   http://localhost:${PORT}`);
-      console.log(`   ========================================\n`);
-      console.log(`📊 Configuración:`);
-      console.log(`   Puerto: ${PORT}`);
-      console.log(`   Base de datos: ${useCloud ? 'PostgreSQL (Cloud)' : 'SQLite (Local)'}`);
-      const redisStatus = redisCache?.isRedisAvailable ? redisCache.isRedisAvailable() : false;
-      console.log(`   Caché Redis: ${redisStatus ? '✅ Activo' : '❌ No disponible'}`);
-      console.log(`   Seguridad: ${securityMiddleware ? '✅ Activa' : '⚠️ Básica'}`);
-      console.log(`   Entorno: ${process.env.NODE_ENV || "development"}`);
-      
-      if (!useCloud) {
-        console.log(`\n📱 Para acceder desde tu teléfono:`);
-        console.log(`   1. Asegúrate de que tu teléfono esté en la misma red WiFi`);
-        console.log(`   2. Encuentra la IP de tu computadora (ipconfig en Windows)`);
-        console.log(`   3. Accede desde el teléfono usando: http://TU_IP:${PORT}`);
-      } else {
-        console.log(`\n☁️ Modo Cloud activado`);
-        console.log(`   La aplicación está lista para producción`);
-      }
-      console.log('');
+    app.listen(PORT, () => {
+      console.log(`Servidor BusTrackSV corriendo en http://localhost:${PORT}`);
+      console.log(`Puerto: ${PORT}`);
+      console.log(`Base de datos: SQLite`);
+      console.log(`Entorno: ${process.env.NODE_ENV || "development"}`);
     });
   } catch (error) {
-    console.error('❌ Error al iniciar el servidor:', error);
+    console.error('Error al iniciar el servidor:', error);
     process.exit(1);
   }
 };

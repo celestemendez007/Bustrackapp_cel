@@ -11,3 +11,4 @@ console.log(`UPDATE usuarios SET password = '${hash}', rol = 'admin' WHERE usuar
 
 
 
+

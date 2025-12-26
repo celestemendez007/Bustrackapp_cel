@@ -82,23 +82,72 @@ class GraphRouteService {
         console.log("Construyendo grafo de rutas...");
         const client = await pool.connect();
         try {
-            // Helper para comparaciones booleanas según la base de datos
-            const useCloud = !!(process.env.DATABASE_URL || process.env.DB_HOST);
-            const activaTrue = useCloud ? 'TRUE' : '1';
-            const rutasRes = await client.query(`SELECT id, numero_ruta, nombre, color, tarifa FROM rutas WHERE activa = ${activaTrue}`);
+            // Obtener rutas con geometry
+            const rutasRes = await client.query('SELECT id, numero_ruta, nombre, color, tarifa, geometry FROM rutas WHERE activa = 1');
             this.rutasInfo = {};
-            rutasRes.rows.forEach(r => this.rutasInfo[r.id] = r);
+            rutasRes.rows.forEach(r => {
+                this.rutasInfo[r.id] = {
+                    ...r,
+                    geometry: this._parseGeometry(r.geometry)
+                };
+            });
 
+            // Obtener puntos_ruta si existen
             const puntosRes = await client.query(`SELECT id, ruta_id, lat, lng, orden, tipo FROM puntos_ruta ORDER BY ruta_id, COALESCE(tipo, 'ida'), CAST(orden AS INTEGER)`);
-            this.nodes = puntosRes.rows.map(p => ({
-                id: p.id,
-                lat: parseFloat(p.lat),
-                lng: parseFloat(p.lng),
-                ruta_id: p.ruta_id,
-                orden: parseInt(p.orden),
-                tipo: p.tipo || 'ida',
-                nextIndex: -1
-            }));
+            
+            // Si hay puntos_ruta, usarlos directamente
+            if (puntosRes.rows.length > 0) {
+                this.nodes = puntosRes.rows.map(p => ({
+                    id: p.id,
+                    lat: parseFloat(p.lat),
+                    lng: parseFloat(p.lng),
+                    ruta_id: p.ruta_id,
+                    orden: parseInt(p.orden),
+                    tipo: p.tipo || 'ida',
+                    nextIndex: -1
+                }));
+            } else {
+                // Si no hay puntos_ruta, generar nodos desde geometry
+                this.nodes = [];
+                rutasRes.rows.forEach(ruta => {
+                    const geometry = this._parseGeometry(ruta.geometry);
+                    if (geometry && Array.isArray(geometry)) {
+                        // Procesar geometry de ida y regreso
+                        let geometryIda = geometry.ida || geometry;
+                        let geometryRegreso = geometry.regreso || null;
+
+                        // Si es un array simple, asumir que es ida
+                        if (Array.isArray(geometryIda) && geometryIda.length > 0) {
+                            geometryIda.forEach((p, idx) => {
+                                this.nodes.push({
+                                    id: -1, // ID temporal
+                                    lat: parseFloat(p.lat || p.latitud),
+                                    lng: parseFloat(p.lng || p.longitud || p.longitud),
+                                    ruta_id: ruta.id,
+                                    orden: idx + 1,
+                                    tipo: 'ida',
+                                    nextIndex: -1
+                                });
+                            });
+                        }
+
+                        // Procesar regreso si existe
+                        if (geometryRegreso && Array.isArray(geometryRegreso) && geometryRegreso.length > 0) {
+                            geometryRegreso.forEach((p, idx) => {
+                                this.nodes.push({
+                                    id: -1,
+                                    lat: parseFloat(p.lat || p.latitud),
+                                    lng: parseFloat(p.lng || p.longitud || p.longitud),
+                                    ruta_id: ruta.id,
+                                    orden: idx + 1,
+                                    tipo: 'regreso',
+                                    nextIndex: -1
+                                });
+                            });
+                        }
+                    }
+                });
+            }
 
             this.grid = {};
             const gridSize = 0.005;
@@ -123,6 +172,19 @@ class GraphRouteService {
         } finally {
             client.release();
         }
+    }
+
+    _parseGeometry(geometry) {
+        if (!geometry) return null;
+        if (Array.isArray(geometry)) return geometry;
+        if (typeof geometry === 'string') {
+            try {
+                return JSON.parse(geometry);
+            } catch (e) {
+                return null;
+            }
+        }
+        return geometry;
     }
 
     async findBestRoute(originLat, originLng, destLat, destLng) {
@@ -287,14 +349,29 @@ class GraphRouteService {
 
         pathStack.reverse();
         let currentBusSegment = null;
+        let currentRouteGeometry = null;
+        let currentRouteId = null;
+        let currentRouteType = null;
 
         pathStack.forEach(step => {
             const node = this.nodes[step.idx];
             const prevNode = this.nodes[step.prevIdx];
 
             if (step.type === 'BUS') {
-                if (!currentBusSegment) {
-                    const ruta = this.rutasInfo[node.ruta_id];
+                const ruta = this.rutasInfo[node.ruta_id];
+                
+                // Si es un nuevo segmento de bus o cambió de ruta
+                if (!currentBusSegment || currentRouteId !== node.ruta_id || currentRouteType !== node.tipo) {
+                    // Finalizar segmento anterior si existe
+                    if (currentBusSegment) {
+                        segments.splice(segments.length - 1, 0, currentBusSegment);
+                    }
+
+                    // Iniciar nuevo segmento
+                    currentRouteId = node.ruta_id;
+                    currentRouteType = node.tipo;
+                    currentRouteGeometry = this._getRouteGeometry(ruta, node.tipo);
+                    
                     currentBusSegment = {
                         tipo: 'BUS',
                         ruta_id: node.ruta_id,
@@ -304,16 +381,22 @@ class GraphRouteService {
                         tarifa: ruta.tarifa || 0.25,
                         fromStop: { lat: prevNode.lat, lng: prevNode.lng },
                         toStop: { lat: node.lat, lng: node.lng },
-                        // Puntos reales
-                        geometria: [{ lat: prevNode.lat, lng: prevNode.lng }, { lat: node.lat, lng: node.lng }]
+                        geometria: this._sliceGeometry(currentRouteGeometry, prevNode, node)
                     };
-                    segments.splice(segments.length - 1, 0, currentBusSegment);
                 } else {
-                    currentBusSegment.geometria.push({ lat: node.lat, lng: node.lng });
+                    // Continuar el mismo segmento, actualizar toStop y geometría
                     currentBusSegment.toStop = { lat: node.lat, lng: node.lng };
+                    currentBusSegment.geometria = this._sliceGeometry(currentRouteGeometry, currentBusSegment.fromStop, currentBusSegment.toStop);
                 }
             } else if (step.type === 'TRANSFER') {
-                currentBusSegment = null;
+                // Finalizar segmento de bus anterior
+                if (currentBusSegment) {
+                    segments.splice(segments.length - 1, 0, currentBusSegment);
+                    currentBusSegment = null;
+                    currentRouteGeometry = null;
+                }
+                
+                // Agregar segmento de caminata para transbordo
                 const d = Math.round(getDistanciaMetros(prevNode.lat, prevNode.lng, node.lat, node.lng));
                 segments.splice(segments.length - 1, 0, {
                     tipo: 'WALK',
@@ -323,6 +406,11 @@ class GraphRouteService {
                 });
             }
         });
+
+        // Finalizar último segmento de bus si existe
+        if (currentBusSegment) {
+            segments.splice(segments.length - 1, 0, currentBusSegment);
+        }
 
         const totalWalking = segments.filter(s => s.tipo === 'WALK').reduce((acc, s) => acc + s.distancia, 0);
         const busSegments = segments.filter(s => s.tipo === 'BUS');
@@ -335,6 +423,69 @@ class GraphRouteService {
                 segmentos: segments
             }
         };
+    }
+
+    _getRouteGeometry(ruta, tipo) {
+        if (!ruta || !ruta.geometry) return null;
+        
+        // Si geometry es un objeto con ida/regreso
+        if (ruta.geometry.ida || ruta.geometry.regreso) {
+            return tipo === 'regreso' ? (ruta.geometry.regreso || ruta.geometry.ida) : (ruta.geometry.ida || ruta.geometry.regreso);
+        }
+        
+        // Si es un array simple, retornarlo
+        if (Array.isArray(ruta.geometry)) {
+            return ruta.geometry;
+        }
+        
+        return null;
+    }
+
+    _sliceGeometry(geometry, fromStop, toStop) {
+        if (!geometry || !Array.isArray(geometry) || geometry.length < 2) {
+            // Fallback: línea recta entre paradas
+            return [{ lat: fromStop.lat, lng: fromStop.lng }, { lat: toStop.lat, lng: toStop.lng }];
+        }
+
+        // Encontrar los puntos más cercanos a fromStop y toStop en la geometry
+        let fromIdx = 0;
+        let toIdx = geometry.length - 1;
+        let minFromDist = Infinity;
+        let minToDist = Infinity;
+
+        geometry.forEach((p, idx) => {
+            const lat = parseFloat(p.lat || p.latitud);
+            const lng = parseFloat(p.lng || p.longitud);
+            if (isNaN(lat) || isNaN(lng)) return;
+
+            const fromDist = getDistanciaMetros(fromStop.lat, fromStop.lng, lat, lng);
+            const toDist = getDistanciaMetros(toStop.lat, toStop.lng, lat, lng);
+
+            if (fromDist < minFromDist) {
+                minFromDist = fromDist;
+                fromIdx = idx;
+            }
+            if (toDist < minToDist) {
+                minToDist = toDist;
+                toIdx = idx;
+            }
+        });
+
+        // Asegurar que fromIdx < toIdx
+        if (fromIdx > toIdx) {
+            [fromIdx, toIdx] = [toIdx, fromIdx];
+        }
+
+        // Extraer el segmento de geometry
+        const sliced = geometry.slice(fromIdx, toIdx + 1);
+        
+        // Asegurar que empiece y termine en las paradas exactas
+        if (sliced.length > 0) {
+            sliced[0] = { lat: fromStop.lat, lng: fromStop.lng };
+            sliced[sliced.length - 1] = { lat: toStop.lat, lng: toStop.lng };
+        }
+
+        return sliced.length > 0 ? sliced : [{ lat: fromStop.lat, lng: fromStop.lng }, { lat: toStop.lat, lng: toStop.lng }];
     }
 }
 

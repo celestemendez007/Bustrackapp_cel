@@ -1,30 +1,7 @@
 import axios from "axios";
 
-// Detectar la URL del API automáticamente
-const getApiBaseUrl = () => {
-  // Si hay una variable de entorno, usarla
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
-  }
-  
-  // Si estamos en desarrollo, usar localhost
-  if (import.meta.env.DEV) {
-    return "http://localhost:4000";
-  }
-  
-  // En producción, SIEMPRE usar la URL correcta del backend en Render
-  // Backend desplegado en: https://bustrackapp-cel.onrender.com
-  // Detecta producción por protocolo HTTPS o hostname diferente a localhost
-  if (window.location.protocol === 'https:' || window.location.hostname !== 'localhost') {
-    return "https://bustrackapp-cel.onrender.com";
-  }
-  
-  // Fallback: localhost solo para desarrollo local
-  return "http://localhost:4000";
-};
-
 // Configuración base del cliente Axios
-const API_BASE_URL = getApiBaseUrl();
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 // Crear instancia de Axios
 const apiClient = axios.create({
@@ -55,17 +32,6 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
-    // Manejar errores de conexión
-    if (!error.response) {
-      // Error de red (servidor no disponible, CORS, etc.)
-      if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error')) {
-        console.error('No se pudo conectar al servidor. Verifica que esté corriendo en:', API_BASE_URL);
-        // No redirigir automáticamente, solo loguear el error
-      } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        console.error('Request timeout:', error.config?.url);
-      }
-    }
-    
     // Manejar errores de timeout
     if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
       console.error('Request timeout:', error.config?.url);

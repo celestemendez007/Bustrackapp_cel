@@ -476,10 +476,7 @@ class RouteFinderService {
         }
 
         console.log("Fetching routes from DB...");
-        // Helper para comparaciones booleanas según la base de datos
-        const useCloud = !!(process.env.DATABASE_URL || process.env.DB_HOST);
-        const activaTrue = useCloud ? 'TRUE' : '1';
-        const routesQuery = await pool.query(`SELECT * FROM rutas WHERE activa = ${activaTrue}`);
+        const routesQuery = await pool.query("SELECT * FROM rutas WHERE activa = 1");
         const logicalRoutes = [];
 
         for (const r of routesQuery.rows) {

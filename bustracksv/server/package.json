@@ -8,9 +8,7 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "create-admin": "node create-admin-user.js",
-    "create-admin-gobierno": "node create-admin-gobierno.js",
     "migrate-rol": "node migrate-add-rol.js",
-    "migrate-to-postgres": "node scripts/migrate-sqlite-to-postgres.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:firestore": "tsx test-upload.ts",
     "build:ts": "tsc",
@@ -34,12 +32,9 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
-    "express-rate-limit": "^7.1.5",
     "firebase-admin": "^13.0.2",
-    "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.3",
-    "redis": "^4.6.12",
     "sql.js": "^1.13.0"
   },
   "devDependencies": {

@@ -129,50 +129,68 @@ export default function LeafletFallbackMap({
             {/* Ruta de Ida - Azul (coincidir con Google Maps) */}
             {validIda.length > 0 && (
                 <Polyline
+                    key="ruta-ida"
                     positions={validIda}
-                    pathOptions={{ color: '#3b82f6', weight: 6, opacity: 0.8 }}
+                    pathOptions={{ 
+                        color: '#3b82f6', 
+                        weight: 6, 
+                        opacity: 0.8,
+                        zIndex: 10
+                    }}
                 />
             )}
 
             {/* Marcadores de Ida */}
-            {puntos?.ida && puntos.ida.map((punto, idx) => (
-                <Marker
-                    key={`ida-${idx}`}
-                    position={[punto.coordenadas[0], punto.coordenadas[1]]}
-                    icon={iconBlue}
-                >
-                    <Popup>
-                        <div className="text-sm">
-                            <strong className="text-blue-600">Ida {idx + 1}: {punto.nombre}</strong>
-                            {punto.direccion && <><br />{punto.direccion}</>}
-                        </div>
-                    </Popup>
-                </Marker>
-            ))}
+            {puntos?.ida && puntos.ida.length > 0 && puntos.ida.map((punto, idx) => {
+                if (!punto || !punto.coordenadas || !isValidPoint(punto.coordenadas)) return null;
+                return (
+                    <Marker
+                        key={`ida-${idx}`}
+                        position={[punto.coordenadas[0], punto.coordenadas[1]]}
+                        icon={iconBlue}
+                    >
+                        <Popup>
+                            <div className="text-sm">
+                                <strong className="text-blue-600">Ida {idx + 1}: {punto.nombre || `Punto ${idx + 1}`}</strong>
+                                {punto.direccion && <><br />{punto.direccion}</>}
+                            </div>
+                        </Popup>
+                    </Marker>
+                );
+            })}
 
             {/* Ruta de Regreso - Rojo */}
             {validRegreso.length > 0 && (
                 <Polyline
+                    key="ruta-regreso"
                     positions={validRegreso}
-                    pathOptions={{ color: '#ef4444', weight: 6, opacity: 0.8 }}
+                    pathOptions={{ 
+                        color: '#ef4444', 
+                        weight: 6, 
+                        opacity: 0.8,
+                        zIndex: 20
+                    }}
                 />
             )}
 
             {/* Marcadores de Regreso */}
-            {puntos?.regreso && puntos.regreso.map((punto, idx) => (
-                <Marker
-                    key={`regreso-${idx}`}
-                    position={[punto.coordenadas[0], punto.coordenadas[1]]}
-                    icon={iconRed}
-                >
-                    <Popup>
-                        <div className="text-sm">
-                            <strong className="text-red-600">Regreso {idx + 1}: {punto.nombre}</strong>
-                            {punto.direccion && <><br />{punto.direccion}</>}
-                        </div>
-                    </Popup>
-                </Marker>
-            ))}
+            {puntos?.regreso && puntos.regreso.length > 0 && puntos.regreso.map((punto, idx) => {
+                if (!punto || !punto.coordenadas || !isValidPoint(punto.coordenadas)) return null;
+                return (
+                    <Marker
+                        key={`regreso-${idx}`}
+                        position={[punto.coordenadas[0], punto.coordenadas[1]]}
+                        icon={iconRed}
+                    >
+                        <Popup>
+                            <div className="text-sm">
+                                <strong className="text-red-600">Regreso {idx + 1}: {punto.nombre || `Punto ${idx + 1}`}</strong>
+                                {punto.direccion && <><br />{punto.direccion}</>}
+                            </div>
+                        </Popup>
+                    </Marker>
+                );
+            })}
 
             {/* Paradas de la Ruta (DB) - CON CIRCULO AMARILLO */}
             {stops && stops.map((stop, i) => {

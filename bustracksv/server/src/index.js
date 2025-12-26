@@ -1009,77 +1009,9 @@ app.post('/admin/guardar-ruta', async (req, res) => {
 });
 
 // --- API: ACTUALIZAR RUTA (Ida y Regreso) ---
-app.put('/admin/rutas/:id', async (req, res) => {
-  const { id } = req.params;
-  const { nombre, puntos_ida, puntos_regreso } = req.body;
-
-  const client = await pool.connect();
-
-  try {
-    await client.query('BEGIN'); // Iniciar transacción segura
-
-    // 1. Actualizar datos básicos
-    if (nombre) {
-      await client.query('UPDATE rutas SET nombre = $1 WHERE id = $2', [nombre, id]);
-    }
-
-    // 2. BORRAR puntos viejos (limpieza para no duplicar líneas)
-    await client.query('DELETE FROM puntos_ruta WHERE ruta_id = $1', [id]);
-
-    // 3. INSERTAR PUNTOS DE IDA (Línea Azul) - OPTIMIZADO: BATCH INSERT
-    if (puntos_ida && puntos_ida.length > 0) {
-      const CHUNK_SIZE = 50;
-      let orden = 1;
-      for (let i = 0; i < puntos_ida.length; i += CHUNK_SIZE) {
-        const chunk = puntos_ida.slice(i, i + CHUNK_SIZE);
-        const values = [];
-        const placeholders = [];
-        chunk.forEach((p, idx) => {
-          // ($1, $2, $3, $4, $5), ($6, $7...)
-          const offset = idx * 5;
-          placeholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5})`);
-          values.push(id, p.lat, p.lng, orden++, 'ida');
-        });
-
-        const sql = `INSERT INTO puntos_ruta (ruta_id, lat, lng, orden, tipo) VALUES ${placeholders.join(', ')}`;
-        await client.query(sql, values);
-      }
-    }
-
-    // 4. INSERTAR PUNTOS DE REGRESO (Línea Roja) - OPTIMIZADO
-    if (puntos_regreso && puntos_regreso.length > 0) {
-      const CHUNK_SIZE = 50;
-      let orden = 1;
-      for (let i = 0; i < puntos_regreso.length; i += CHUNK_SIZE) {
-        const chunk = puntos_regreso.slice(i, i + CHUNK_SIZE);
-        const values = [];
-        const placeholders = [];
-        chunk.forEach((p, idx) => {
-          const offset = idx * 5;
-          placeholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5})`);
-          values.push(id, p.lat, p.lng, orden++, 'regreso');
-        });
-
-        const sql = `INSERT INTO puntos_ruta (ruta_id, lat, lng, orden, tipo) VALUES ${placeholders.join(', ')}`;
-        await client.query(sql, values);
-      }
-    }
-
-    await client.query('COMMIT'); // Guardar cambios
-
-    // Guardar en disco explícitamente después de la carga masiva
-    await pool.save();
-
-    res.json({ success: true, message: "Trayectoria actualizada" });
-
-  } catch (error) {
-    await client.query('ROLLBACK'); // Cancelar si falla
-    console.error(error);
-    res.status(500).json({ error: "Error al guardar en base de datos" });
-  } finally {
-    client.release();
-  }
-});
+// ENDPOINT ANTIGUO ELIMINADO - Usaba tabla puntos_ruta que no existe
+// El endpoint correcto está más abajo (línea ~1564) que usa parada_ruta
+// Se eliminó completamente para evitar conflictos de rutas duplicadas
 
 // Buscar rutas cercanas (Simplificado)
 app.get("/api/rutas-cercanas", async (req, res) => {

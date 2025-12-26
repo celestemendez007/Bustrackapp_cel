@@ -108,6 +108,42 @@ export const ensureSchema = async () => {
       );
     `);
     
+    // Asegurar que todas las columnas necesarias existan (migraciones)
+    try {
+      // Verificar y agregar columna ultimo_acceso si no existe
+      await pool.query(`
+        DO $$ 
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'usuarios' AND column_name = 'ultimo_acceso'
+          ) THEN
+            ALTER TABLE usuarios ADD COLUMN ultimo_acceso TIMESTAMP;
+          END IF;
+        END $$;
+      `);
+    } catch (colError) {
+      // Ignorar error si la columna ya existe
+      console.log('ℹ️ Columna ultimo_acceso ya existe o no se pudo verificar');
+    }
+    
+    try {
+      // Verificar y agregar columna rol si no existe
+      await pool.query(`
+        DO $$ 
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'usuarios' AND column_name = 'rol'
+          ) THEN
+            ALTER TABLE usuarios ADD COLUMN rol VARCHAR(50) DEFAULT 'usuario';
+          END IF;
+        END $$;
+      `);
+    } catch (colError) {
+      console.log('ℹ️ Columna rol ya existe o no se pudo verificar');
+    }
+    
     // Crear índices para usuarios
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_usuarios_usuario ON usuarios(usuario);
@@ -119,6 +155,7 @@ export const ensureSchema = async () => {
     return true;
   } catch (err) {
     console.error('❌ Error al crear esquema:', err);
+    console.error('Detalles del error:', err.message);
     return false;
   }
 };

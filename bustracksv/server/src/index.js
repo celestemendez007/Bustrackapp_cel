@@ -252,6 +252,75 @@ const requireAdmin = async (req, res, next) => {
 // 🔹 RUTAS DE AUTENTICACIÓN
 // ===============================
 
+// Endpoint temporal para crear el primer usuario admin (solo si no existe ningún admin)
+app.post("/setup/admin", async (req, res) => {
+  try {
+    // Verificar si ya existe algún usuario admin
+    const existingAdmins = await pool.query(
+      "SELECT id FROM usuarios WHERE rol IN ('admin', 'gobierno')"
+    );
+
+    if (existingAdmins.rows.length > 0) {
+      return res.status(403).json({ 
+        message: "Ya existen usuarios administradores. Use el panel de administración para crear más usuarios.",
+        success: false 
+      });
+    }
+
+    // Credenciales del primer admin
+    const usuario = 'admin_gobierno';
+    const password = 'Gobierno2025!';
+    const email = 'admin@gobierno.sv';
+    const nombre_completo = 'Administrador de Gobierno';
+    const rol = 'admin';
+
+    // Verificar si el usuario ya existe
+    const existingUser = await pool.query(
+      "SELECT id FROM usuarios WHERE usuario = $1 OR email = $2",
+      [usuario, email]
+    );
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    if (existingUser.rows.length > 0) {
+      // Actualizar el usuario existente a admin
+      const existing = existingUser.rows[0];
+      await pool.query(
+        "UPDATE usuarios SET password = $1, rol = $2, email = $3, nombre_completo = $4, usuario = $5 WHERE id = $6",
+        [hashedPassword, rol, email, nombre_completo, usuario, existing.id]
+      );
+      return res.json({
+        success: true,
+        message: "Usuario administrador actualizado exitosamente",
+        usuario: usuario,
+        password: password,
+        rol: rol
+      });
+    } else {
+      // Crear nuevo usuario admin
+      await pool.query(
+        "INSERT INTO usuarios (usuario, password, email, nombre_completo, rol, activo) VALUES ($1, $2, $3, $4, $5, $6)",
+        [usuario, hashedPassword, email, nombre_completo, rol, true]
+      );
+      return res.json({
+        success: true,
+        message: "Usuario administrador creado exitosamente",
+        usuario: usuario,
+        password: password,
+        rol: rol,
+        url: "/admin/login"
+      });
+    }
+  } catch (error) {
+    console.error("Error al crear usuario administrador:", error);
+    return res.status(500).json({ 
+      success: false,
+      message: "Error al crear usuario administrador",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Registrar usuario
 app.post("/register", async (req, res) => {
   const { usuario, password, email, nombre_completo, telefono } = req.body;

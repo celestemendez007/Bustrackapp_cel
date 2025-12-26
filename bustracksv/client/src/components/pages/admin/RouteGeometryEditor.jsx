@@ -25,7 +25,7 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
 
   // Inicializar - Mejorar parsing de geometría y también construir desde paradas
   useEffect(() => {
-    // Si hay paradas (stops), construir geometría desde ellas
+    // PRIORIDAD 1: Si hay paradas (stops), construir geometría desde ellas (siempre)
     if (stops && stops.length > 0) {
       const paradasIda = stops
         .filter(p => p.direccion === 'ida' || !p.direccion)
@@ -44,19 +44,16 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
         lng: typeof p.longitud === 'number' ? p.longitud : parseFloat(p.longitud)
       })).filter(p => !isNaN(p.lat) && !isNaN(p.lng));
       
-      // Solo usar paradas si no hay value o value está vacío
-      if (!value || value === '' || value === '{}' || value === 'null' || value === null) {
-        if (pathIdaFromStops.length > 0) {
-          setPathIda(pathIdaFromStops);
-        }
-        if (pathRegresoFromStops.length > 0) {
-          setPathRegreso(pathRegresoFromStops);
-        }
+      // Si hay paradas, SIEMPRE construir desde ellas (prioridad sobre geometry guardada)
+      if (pathIdaFromStops.length > 0) {
+        setPathIda(pathIdaFromStops);
       }
-    }
-    
-    // Si hay value (geometría guardada), parsearla
-    if (value && value !== '' && value !== '{}' && value !== 'null') {
+      if (pathRegresoFromStops.length > 0) {
+        setPathRegreso(pathRegresoFromStops);
+      }
+      
+      // Si no hay paradas pero hay value, entonces parsear value
+    } else if (value && value !== '' && value !== '{}' && value !== 'null' && value !== null) {
       try {
         const parsed = typeof value === 'string' ? JSON.parse(value) : value;
         

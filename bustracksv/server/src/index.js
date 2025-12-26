@@ -29,6 +29,7 @@ import { Client } from "@googlemaps/google-maps-services-js";
 import RouteFinderService from "./services/RouteFinderService.js";
 import RouteGenerationService from "./services/RouteGenerationService.js";
 import GraphRouteService from "./services/GraphRouteService.js";
+import { initAdminCeleste } from "./initAdminUser.js";
 
 // Para Node.js < 18, usar node-fetch si es necesario
 let fetch;
@@ -237,8 +238,11 @@ app.post("/login", async (req, res) => {
     }
 
     // Actualizar último acceso
+    // Detectar si es PostgreSQL o SQLite para usar la función correcta
+    const isPostgres = process.env.DATABASE_URL || (process.env.DB_HOST && process.env.DB_USER);
+    const timestampFunction = isPostgres ? 'CURRENT_TIMESTAMP' : "datetime('now')";
     await pool.query(
-      "UPDATE usuarios SET ultimo_acceso = datetime('now') WHERE id = $1",
+      `UPDATE usuarios SET ultimo_acceso = ${timestampFunction} WHERE id = $1`,
       [user.id]
     );
 
@@ -1864,6 +1868,10 @@ const startServer = async () => {
       console.error('No se pudo conectar a la base de datos.');
       process.exit(1);
     }
+
+    // Inicializar usuario admin_celeste si no existe
+    console.log('Inicializando usuario administrador...');
+    await initAdminCeleste();
 
     app.listen(PORT, () => {
       console.log(`Servidor BusTrackSV corriendo en http://localhost:${PORT}`);

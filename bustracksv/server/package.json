@@ -8,6 +8,7 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "create-admin": "node create-admin-user.js",
+    "create-admin-celeste": "node create-admin-celeste.js",
     "migrate-rol": "node migrate-add-rol.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:firestore": "tsx test-upload.ts",

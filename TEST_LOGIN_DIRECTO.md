@@ -64,3 +64,5 @@ Si el backend está usando SQLite en lugar de PostgreSQL:
 3. Espera a que termine el deploy
 4. Verifica los logs de nuevo para confirmar que ahora dice "PostgreSQL"
 
+
+

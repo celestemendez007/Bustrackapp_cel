@@ -90,3 +90,5 @@ WHERE email = 'celeste.mendez007@gmail.com';
 3. Intenta hacer login desde el frontend
 4. Busca cualquier error que aparezca
 
+
+

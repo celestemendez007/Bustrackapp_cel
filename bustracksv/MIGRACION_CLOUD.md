@@ -329,3 +329,5 @@ openssl rand -base64 32
 **¿Necesitas ayuda?** Revisa los logs en Vercel Dashboard o Supabase Dashboard para más detalles.
 
 
+
+

@@ -42,3 +42,5 @@ VALUES (
 SELECT usuario, email, rol, activo, LEFT(password, 30) as password_preview 
 FROM usuarios WHERE usuario = 'admin';
 
+
+

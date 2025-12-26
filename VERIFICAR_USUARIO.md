@@ -98,3 +98,5 @@ Si dice "usuario no encontrado", es porque:
 
 **La solución más común:** Verifica que `DATABASE_URL` esté configurada y haz redeploy del backend.
 
+
+

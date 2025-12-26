@@ -204,3 +204,5 @@ VALUES (
 - [ ] Login de admin funciona
 - [ ] App agregada a iPhone
 
+
+

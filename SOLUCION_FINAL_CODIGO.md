@@ -53,3 +53,5 @@ Una vez que los logs muestren que está usando PostgreSQL, prueba el login:
 2. Haz un "Manual Deploy" del backend
 3. Verifica los logs de nuevo
 
+
+

@@ -103,3 +103,5 @@ VITE v7.x.x  ready in xxx ms
 La IP de tu computadora puede cambiar cada vez que te conectas a una red diferente. Si cambias de red WiFi, necesitarás actualizar el archivo `.env.local` con la nueva IP.
 
 
+
+

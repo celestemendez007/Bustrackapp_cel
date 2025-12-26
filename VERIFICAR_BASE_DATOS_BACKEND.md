@@ -55,3 +55,5 @@ Una vez que uses PostgreSQL, el login debería funcionar con:
 - Usuario: `admin_celeste`
 - Contraseña: `123456`
 
+
+

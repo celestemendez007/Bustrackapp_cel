@@ -46,3 +46,5 @@ Debe mostrar el usuario con:
 ### 3. Hay un error en el código que impide que las rutas se registren
 - Revisa los logs para ver errores al iniciar
 
+
+

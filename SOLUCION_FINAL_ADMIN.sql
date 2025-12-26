@@ -27,3 +27,5 @@ WHERE usuario = 'admin_celeste';
 -- activo = true
 -- password_preview debe empezar con '$2b$10$' (hash bcrypt)
 
+
+

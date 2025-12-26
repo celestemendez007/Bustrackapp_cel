@@ -42,3 +42,5 @@ Busca al inicio:
 - ✅ `☁️ Modo Cloud: Usando PostgreSQL`
 - ❌ Si dice `💾 Modo Local: Usando SQLite` → El problema está ahí
 
+
+

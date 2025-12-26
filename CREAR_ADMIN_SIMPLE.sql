@@ -23,3 +23,5 @@ VALUES (
 -- Verificar que se creó
 SELECT usuario, email, rol, activo FROM usuarios WHERE usuario = 'admin';
 
+
+

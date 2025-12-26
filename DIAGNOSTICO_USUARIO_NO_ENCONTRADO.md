@@ -107,3 +107,5 @@ Después de corregir, prueba el login de nuevo:
 2. Redeploy del backend
 3. Verificar logs que diga "PostgreSQL"
 
+
+

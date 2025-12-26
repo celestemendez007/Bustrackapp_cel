@@ -42,3 +42,5 @@ SET
 -- 3. Verificar de nuevo
 SELECT usuario, email, rol, activo FROM usuarios WHERE usuario = 'admin_celeste';
 
+
+

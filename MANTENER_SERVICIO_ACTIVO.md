@@ -138,3 +138,5 @@ Este endpoint es perfecto para los pings porque:
 - ✅ Responde rápido
 - ✅ Verifica que el servicio está funcionando
 
+
+

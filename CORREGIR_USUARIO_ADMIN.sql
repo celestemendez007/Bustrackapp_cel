@@ -22,3 +22,5 @@ WHERE usuario = 'admin_celeste';
 -- El script create-admin-user.js genera el hash correctamente
 -- Ejecútalo desde Render Shell o localmente con Node.js
 
+
+

@@ -28,3 +28,5 @@ SET
 -- Paso 4: Verificar que se creó correctamente
 SELECT usuario, email, rol, activo FROM usuarios WHERE usuario = 'admin_celeste';
 
+
+

@@ -9,3 +9,5 @@ console.log('Hash generado:', hash);
 console.log('\nUsa este hash en el UPDATE SQL:');
 console.log(`UPDATE usuarios SET password = '${hash}', rol = 'admin' WHERE usuario = 'admin_celeste';`);
 
+
+

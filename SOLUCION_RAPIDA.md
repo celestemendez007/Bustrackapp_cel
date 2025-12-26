@@ -69,3 +69,5 @@ WHERE usuario = 'admin_celeste';
 
 3. Si funciona, ¡cambia la contraseña después del primer acceso!
 
+
+

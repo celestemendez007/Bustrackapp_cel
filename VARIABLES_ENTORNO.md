@@ -149,3 +149,5 @@ Antes de desplegar, verifica que tienes:
 
 **Recuerda:** Nunca subas archivos `.env` con valores reales a Git. Usa las variables de entorno de tu proveedor de nube.
 
+
+

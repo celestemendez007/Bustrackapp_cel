@@ -160,3 +160,5 @@ CREATE TABLE IF NOT EXISTS ejemplos_entrenamiento (
 -- FIN DEL ESQUEMA
 -- ============================================================================
 
+
+

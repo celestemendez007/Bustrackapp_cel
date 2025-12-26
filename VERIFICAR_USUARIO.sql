@@ -22,3 +22,5 @@ WHERE usuario = 'admin_celeste';
 -- 4. Si el password NO es un hash, necesitas actualizarlo
 -- El password debe empezar con: $2b$10$
 
+
+

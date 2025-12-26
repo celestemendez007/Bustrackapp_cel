@@ -161,3 +161,5 @@ Usa **Vercel** - Es gratis, profesional y escalable
 **¿Necesitas ayuda?** Revisa `DEPLOY_VERCEL.md` para instrucciones detalladas.
 
 
+
+

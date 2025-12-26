@@ -139,3 +139,5 @@ Si aún no has creado la base de datos PostgreSQL en Render:
 
 **¡Eso es todo!** Tu código ya está configurado para usar PostgreSQL automáticamente cuando detecta la variable `DATABASE_URL`.
 
+
+

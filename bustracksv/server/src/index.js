@@ -1587,16 +1587,22 @@ app.put("/admin/rutas/:id", authenticateToken, requireAdmin, async (req, res) =>
       paramCount++; 
     }
     if (geometry !== undefined) {
-      if (geometry && geometry.trim()) {
+      if (geometry && typeof geometry === 'string' && geometry.trim()) {
         try {
-          const parsed = typeof geometry === 'string' ? JSON.parse(geometry) : geometry;
+          const parsed = JSON.parse(geometry);
           updates.push(`geometry = $${paramCount}`);
           values.push(JSON.stringify(parsed));
           paramCount++;
         } catch (err) {
           return res.status(400).json({ success: false, message: "Formato de coordenadas inválido. Debe ser JSON válido." });
         }
+      } else if (geometry && typeof geometry === 'object') {
+        // Si es un objeto, stringificarlo
+        updates.push(`geometry = $${paramCount}`);
+        values.push(JSON.stringify(geometry));
+        paramCount++;
       } else {
+        // null, undefined, o string vacío
         updates.push(`geometry = $${paramCount}`);
         values.push(null);
         paramCount++;

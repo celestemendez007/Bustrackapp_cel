@@ -13,7 +13,7 @@ const getApiBaseUrl = () => {
   }
   
   // En producción, SIEMPRE usar la URL correcta del backend en Render
-  // Ya que el backend está desplegado en bustrackapp-cel.onrender.com
+  // Backend desplegado en: https://bustrackapp-cel.onrender.com
   // Detecta producción por protocolo HTTPS o hostname diferente a localhost
   if (window.location.protocol === 'https:' || window.location.hostname !== 'localhost') {
     return "https://bustrackapp-cel.onrender.com";

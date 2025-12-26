@@ -279,6 +279,32 @@ app.get("/setup/list-admins", async (req, res) => {
   }
 });
 
+// Endpoint temporal para verificar/crear esquema completo (solo para setup inicial)
+app.post("/setup/ensure-schema", async (req, res) => {
+  try {
+    if (useCloud) {
+      const dbCloud = await import("./db-cloud.js");
+      if (dbCloud.ensureSchema) {
+        const result = await dbCloud.ensureSchema();
+        return res.json({
+          success: result,
+          message: result ? "Esquema verificado/creado exitosamente" : "Error al crear esquema"
+        });
+      }
+      return res.status(500).json({ success: false, message: "ensureSchema no disponible" });
+    } else {
+      return res.json({ success: false, message: "Este endpoint solo funciona en modo cloud" });
+    }
+  } catch (error) {
+    console.error("Error en ensure-schema:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error al crear esquema",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Endpoint temporal para resetear contraseña de un usuario admin (solo para setup inicial)
 app.post("/setup/reset-admin-password", async (req, res) => {
   try {
@@ -1506,10 +1532,19 @@ app.post("/admin/rutas", authenticateToken, requireAdmin, async (req, res) => {
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {
     console.error("Error al crear ruta:", err);
+    console.error("Stack trace:", err.stack);
     if (err.message.includes('UNIQUE')) {
       return res.status(409).json({ success: false, message: "El número de ruta ya existe" });
     }
-    res.status(500).json({ success: false, message: "Error al crear ruta" });
+    // Incluir más detalles del error en desarrollo
+    const errorMessage = process.env.NODE_ENV === 'development' 
+      ? `Error al crear ruta: ${err.message}` 
+      : "Error al crear ruta";
+    res.status(500).json({ 
+      success: false, 
+      message: errorMessage,
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 

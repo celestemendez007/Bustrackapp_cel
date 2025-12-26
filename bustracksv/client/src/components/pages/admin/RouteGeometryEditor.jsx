@@ -45,6 +45,14 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
       })).filter(p => !isNaN(p.lat) && !isNaN(p.lng));
       
       // Si hay paradas, SIEMPRE construir desde ellas (prioridad sobre geometry guardada)
+      console.log('🔵 Construyendo rutas desde paradas:', {
+        totalParadas: stops.length,
+        paradasIda: paradasIda.length,
+        paradasRegreso: paradasRegreso.length,
+        pathIda: pathIdaFromStops.length,
+        pathRegreso: pathRegresoFromStops.length
+      });
+      
       if (pathIdaFromStops.length > 0) {
         setPathIda(pathIdaFromStops);
       }

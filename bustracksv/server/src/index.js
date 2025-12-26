@@ -341,7 +341,11 @@ app.post("/login", async (req, res) => {
     });
   } catch (err) {
     console.error("Error en login:", err);
-    res.status(500).json({ message: "Error en el servidor" });
+    console.error("Stack trace:", err.stack);
+    res.status(500).json({ 
+      message: "Error en el servidor",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 

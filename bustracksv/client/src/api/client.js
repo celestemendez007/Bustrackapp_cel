@@ -12,13 +12,13 @@ const getApiBaseUrl = () => {
     return "http://localhost:4000";
   }
   
-  // En producción, usar la URL correcta del backend en Render
-  // Si el frontend está en Render, el backend debería estar en bustrackapp-cel.onrender.com
-  if (window.location.hostname.includes('render.com') || window.location.hostname.includes('onrender.com')) {
+  // En producción, SIEMPRE usar la URL correcta del backend en Render
+  // Ya que el backend está desplegado en bustrackapp-cel.onrender.com
+  if (window.location.protocol === 'https:' || window.location.hostname !== 'localhost') {
     return "https://bustrackapp-cel.onrender.com";
   }
   
-  // Fallback: localhost para desarrollo local
+  // Fallback: localhost solo para desarrollo local
   return "http://localhost:4000";
 };
 

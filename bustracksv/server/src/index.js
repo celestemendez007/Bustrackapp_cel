@@ -1603,9 +1603,17 @@ app.put("/admin/rutas/:id", authenticateToken, requireAdmin, async (req, res) =>
       }
     }
 
+    // Validar que haya algo que actualizar
+    if (updates.length === 0) {
+      return res.status(400).json({ success: false, message: "No hay campos para actualizar" });
+    }
+
+    // Agregar fecha_actualizacion (no usa parámetro)
     updates.push(useCloud 
       ? `fecha_actualizacion = NOW()`
       : `fecha_actualizacion = datetime('now')`);
+    
+    // Agregar el id al final de los valores para el WHERE
     values.push(id);
 
     const result = await pool.query(

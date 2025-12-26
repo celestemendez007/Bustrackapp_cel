@@ -436,7 +436,18 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
         {/* Trazado Ida - AZUL */}
         {pathIda.length > 0 && (
           <Polyline
-            path={pathIda}
+            path={pathIda.map(p => {
+              // Normalizar formato de puntos: aceptar tanto {lat, lng} como [lat, lng]
+              if (Array.isArray(p)) {
+                return { lat: p[0], lng: p[1] };
+              } else if (typeof p === 'object' && p !== null) {
+                return {
+                  lat: typeof p.lat === 'number' ? p.lat : parseFloat(p.lat || p.latitud || 0),
+                  lng: typeof p.lng === 'number' ? p.lng : parseFloat(p.lng || p.longitud || 0)
+                };
+              }
+              return p;
+            }).filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng))}
             options={{
               strokeColor: '#3b82f6', // blue-500
               strokeOpacity: 0.8,

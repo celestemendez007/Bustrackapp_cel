@@ -23,31 +23,85 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Inicializar - Mejorar parsing de geometría
+  // Inicializar - Mejorar parsing de geometría y también construir desde paradas
   useEffect(() => {
-    if (value) {
+    // Si hay paradas (stops), construir geometría desde ellas
+    if (stops && stops.length > 0 && (!value || value === '' || value === '{}' || value === 'null')) {
+      const paradasIda = stops
+        .filter(p => p.direccion === 'ida' || !p.direccion)
+        .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+      const paradasRegreso = stops
+        .filter(p => p.direccion === 'regreso')
+        .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+      
+      const pathIdaFromStops = paradasIda.map(p => ({
+        lat: typeof p.latitud === 'number' ? p.latitud : parseFloat(p.latitud),
+        lng: typeof p.longitud === 'number' ? p.longitud : parseFloat(p.longitud)
+      })).filter(p => !isNaN(p.lat) && !isNaN(p.lng));
+      
+      const pathRegresoFromStops = paradasRegreso.map(p => ({
+        lat: typeof p.latitud === 'number' ? p.latitud : parseFloat(p.latitud),
+        lng: typeof p.longitud === 'number' ? p.longitud : parseFloat(p.longitud)
+      })).filter(p => !isNaN(p.lat) && !isNaN(p.lng));
+      
+      if (pathIdaFromStops.length > 0) {
+        setPathIda(pathIdaFromStops);
+      }
+      if (pathRegresoFromStops.length > 0) {
+        setPathRegreso(pathRegresoFromStops);
+      }
+    }
+    
+    // Si hay value (geometría guardada), parsearla
+    if (value && value !== '' && value !== '{}' && value !== 'null') {
       try {
         const parsed = typeof value === 'string' ? JSON.parse(value) : value;
         
         // Formato 1: { ida: [...], regreso: [...] }
         if (parsed?.ida) {
-          setPathIda(Array.isArray(parsed.ida) ? parsed.ida : []);
+          const idaPath = Array.isArray(parsed.ida) ? parsed.ida : [];
+          // Normalizar formato de puntos
+          const normalizedIda = idaPath.map(p => {
+            if (Array.isArray(p)) return { lat: p[0], lng: p[1] };
+            if (typeof p === 'object' && p !== null) {
+              return {
+                lat: typeof p.lat === 'number' ? p.lat : parseFloat(p.lat || p.latitud || 0),
+                lng: typeof p.lng === 'number' ? p.lng : parseFloat(p.lng || p.longitud || 0)
+              };
+            }
+            return p;
+          }).filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng));
+          setPathIda(normalizedIda);
         }
         if (parsed?.regreso) {
-          setPathRegreso(Array.isArray(parsed.regreso) ? parsed.regreso : []);
+          const regresoPath = Array.isArray(parsed.regreso) ? parsed.regreso : [];
+          // Normalizar formato de puntos
+          const normalizedRegreso = regresoPath.map(p => {
+            if (Array.isArray(p)) return { lat: p[0], lng: p[1] };
+            if (typeof p === 'object' && p !== null) {
+              return {
+                lat: typeof p.lat === 'number' ? p.lat : parseFloat(p.lat || p.latitud || 0),
+                lng: typeof p.lng === 'number' ? p.lng : parseFloat(p.lng || p.longitud || 0)
+              };
+            }
+            return p;
+          }).filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng));
+          setPathRegreso(normalizedRegreso);
         }
         
         // Formato 2: Array simple (asumimos que es ida)
         if (Array.isArray(parsed) && !parsed.ida && !parsed.regreso) {
-          setPathIda(parsed);
-        }
-        
-        // Formato 3: String JSON de array simple
-        if (typeof parsed === 'string' && parsed.trim().startsWith('[')) {
-          const arr = JSON.parse(parsed);
-          if (Array.isArray(arr)) {
-            setPathIda(arr);
-          }
+          const normalizedArray = parsed.map(p => {
+            if (Array.isArray(p)) return { lat: p[0], lng: p[1] };
+            if (typeof p === 'object' && p !== null) {
+              return {
+                lat: typeof p.lat === 'number' ? p.lat : parseFloat(p.lat || p.latitud || 0),
+                lng: typeof p.lng === 'number' ? p.lng : parseFloat(p.lng || p.longitud || 0)
+              };
+            }
+            return p;
+          }).filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng));
+          setPathIda(normalizedArray);
         }
       } catch (e) {
         console.error("Error parseando geometry inicial", e);
@@ -56,19 +110,25 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
           try {
             const directParse = JSON.parse(value);
             if (Array.isArray(directParse)) {
-              setPathIda(directParse);
+              const normalizedArray = directParse.map(p => {
+                if (Array.isArray(p)) return { lat: p[0], lng: p[1] };
+                if (typeof p === 'object' && p !== null) {
+                  return {
+                    lat: typeof p.lat === 'number' ? p.lat : parseFloat(p.lat || p.latitud || 0),
+                    lng: typeof p.lng === 'number' ? p.lng : parseFloat(p.lng || p.longitud || 0)
+                  };
+                }
+                return p;
+              }).filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng));
+              setPathIda(normalizedArray);
             }
           } catch (e2) {
             console.error("Error en parsing directo:", e2);
           }
         }
       }
-    } else {
-      // Si no hay value, limpiar los paths
-      setPathIda([]);
-      setPathRegreso([]);
     }
-  }, [value]);
+  }, [value, stops]);
 
   const onLoad = useCallback((map) => {
     if (!map || !window.google || !window.google.maps) {

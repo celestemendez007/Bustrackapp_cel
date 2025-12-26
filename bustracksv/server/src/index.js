@@ -252,6 +252,33 @@ const requireAdmin = async (req, res, next) => {
 // 🔹 RUTAS DE AUTENTICACIÓN
 // ===============================
 
+// Endpoint temporal para listar usuarios admin (solo para debugging)
+app.get("/setup/list-admins", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, usuario, email, rol, activo FROM usuarios WHERE rol IN ('admin', 'gobierno') ORDER BY fecha_creacion"
+    );
+    return res.json({
+      success: true,
+      count: result.rows.length,
+      usuarios: result.rows.map(u => ({
+        id: u.id,
+        usuario: u.usuario,
+        email: u.email,
+        rol: u.rol,
+        activo: u.activo
+      }))
+    });
+  } catch (error) {
+    console.error("Error al listar admins:", error);
+    return res.status(500).json({ 
+      success: false,
+      message: "Error al listar usuarios admin",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Endpoint temporal para crear el primer usuario admin (solo si no existe ningún admin)
 app.post("/setup/admin", async (req, res) => {
   try {

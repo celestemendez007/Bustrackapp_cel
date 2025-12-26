@@ -9,7 +9,7 @@ const containerStyle = {
   height: '100%'
 };
 
-export default function RouteGeometryEditor({ value, onChange, onSave, stops = [], previewStop = null }) {
+export default function RouteGeometryEditor({ value, onChange, onSave, stops = [], previewStop = null, rutaId = null }) {
   const { isLoaded, loadError } = useGoogleMaps();
   const mapRef = useRef(null);
 
@@ -23,9 +23,27 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Inicializar
+  // Cargar puntos guardados de la ruta cuando se edita (prioridad)
   useEffect(() => {
-    if (value) {
+    if (rutaId) {
+      const loadRoutePoints = async () => {
+        try {
+          const response = await adminService.getRoutePuntos(rutaId);
+          if (response.success && response.data) {
+            const puntosIda = response.data.ida || [];
+            const puntosRegreso = response.data.regreso || [];
+            
+            // Cargar puntos desde la base de datos (prioridad sobre value)
+            setPathIda(puntosIda);
+            setPathRegreso(puntosRegreso);
+          }
+        } catch (err) {
+          console.error("Error cargando puntos de ruta:", err);
+        }
+      };
+      loadRoutePoints();
+    } else if (value) {
+      // Solo usar value si no hay rutaId (nueva ruta o fallback)
       try {
         const parsed = typeof value === 'string' ? JSON.parse(value) : value;
         if (parsed?.ida) setPathIda(parsed.ida);
@@ -35,7 +53,7 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
         console.error("Error parseando geometry inicial", e);
       }
     }
-  }, [value]);
+  }, [rutaId, value]);
 
   const onLoad = useCallback((map) => {
     if (!map || !window.google || !window.google.maps) {
@@ -345,12 +363,28 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
   };
 
 
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
     const finalGeometry = { ida: pathIda, regreso: pathRegreso };
     const jsonString = JSON.stringify(finalGeometry);
     const stopData = { ida: markersIda, regreso: markersRegreso };
     if (onChange) onChange(jsonString);
-    if (onSave) onSave(jsonString, stopData);
+    if (onSave) {
+      await onSave(jsonString, stopData);
+      // Recargar puntos después de guardar para asegurar que se muestren
+      if (rutaId) {
+        try {
+          const response = await adminService.getRoutePuntos(rutaId);
+          if (response.success && response.data) {
+            const puntosIda = response.data.ida || [];
+            const puntosRegreso = response.data.regreso || [];
+            setPathIda(puntosIda);
+            setPathRegreso(puntosRegreso);
+          }
+        } catch (err) {
+          console.error("Error recargando puntos después de guardar:", err);
+        }
+      }
+    }
   };
 
   const renderMapContent = () => {

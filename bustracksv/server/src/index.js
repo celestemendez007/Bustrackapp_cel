@@ -1215,6 +1215,43 @@ app.post("/admin/rutas", authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+// Obtener puntos de una ruta (ida y regreso)
+app.get("/admin/rutas/:id/puntos", authenticateToken, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(`
+      SELECT lat, lng, orden, tipo
+      FROM puntos_ruta
+      WHERE ruta_id = $1
+      ORDER BY tipo, orden ASC
+    `, [id]);
+
+    // Separar puntos de ida y regreso
+    const puntosIda = [];
+    const puntosRegreso = [];
+
+    result.rows.forEach(row => {
+      const punto = { lat: parseFloat(row.lat), lng: parseFloat(row.lng) };
+      if (row.tipo === 'ida') {
+        puntosIda.push(punto);
+      } else if (row.tipo === 'regreso') {
+        puntosRegreso.push(punto);
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        ida: puntosIda,
+        regreso: puntosRegreso
+      }
+    });
+  } catch (err) {
+    console.error("Error al obtener puntos de ruta:", err);
+    res.status(500).json({ success: false, message: "Error al obtener puntos de ruta" });
+  }
+});
+
 // Actualizar ruta
 app.put("/admin/rutas/:id", authenticateToken, requireAdmin, async (req, res) => {
   const { id } = req.params;

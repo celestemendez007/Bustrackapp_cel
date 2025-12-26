@@ -877,6 +877,7 @@ export default function AdminDashboardPage() {
                       onSave={handleQuickSave}
                       stops={routeStops}
                       previewStop={showStopForm ? stopFormData : null}
+                      rutaId={editingItem?.id || null}
                     />
                     <div className="mt-4 p-3 bg-slate-700/50 rounded text-xs text-slate-300 border border-slate-600">
                       <p className="font-semibold mb-2">Consejos:</p>

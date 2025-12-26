@@ -107,6 +107,17 @@ class AdminService {
     }
   }
 
+  // Obtener puntos de una ruta (ida y regreso)
+  async getRoutePuntos(rutaId) {
+    try {
+      const response = await apiClient.get(`/admin/rutas/${rutaId}/puntos`);
+      return { success: true, data: response.data.data || { ida: [], regreso: [] } };
+    } catch (error) {
+      console.error("Error al obtener puntos de la ruta:", error);
+      return { success: false, message: "Error al obtener puntos de la ruta", data: { ida: [], regreso: [] } };
+    }
+  }
+
   // Eliminar parada de ruta
   async deleteParadaRuta(rutaId, paradaId) {
     try {

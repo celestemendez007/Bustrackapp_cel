@@ -1515,10 +1515,22 @@ app.post("/admin/rutas", authenticateToken, requireAdmin, async (req, res) => {
     const result = await pool.query(`
       INSERT INTO rutas (nombre, descripcion, color, numero_ruta, empresa, tipo, tarifa, 
                         horario_inicio, horario_fin, frecuencia_minutos, activa, geometry)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 1, $11)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
-    `, [nombre, descripcion || null, color || '#0066CC', numero_ruta, empresa || null, tipo || 'Bus',
-      tarifa || 0.25, horario_inicio || '05:00:00', horario_fin || '21:00:00', frecuencia_minutos || 15, geometryFormatted]);
+    `, [
+      nombre, 
+      descripcion || null, 
+      color || '#0066CC', 
+      numero_ruta, 
+      empresa || null, 
+      tipo || 'Bus',
+      tarifa || 0.25, 
+      horario_inicio || '05:00:00', 
+      horario_fin || '21:00:00', 
+      frecuencia_minutos || 15, 
+      true, // activa
+      geometryFormatted
+    ]);
 
     // Invalidar caché de rutas después de crear
     if (redisCache?.routeCache) {

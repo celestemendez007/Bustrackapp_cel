@@ -151,7 +151,99 @@ export const ensureSchema = async () => {
       CREATE INDEX IF NOT EXISTS idx_usuarios_rol ON usuarios(rol);
     `);
     
-    console.log('✅ Esquema de usuarios verificado/creado');
+    // Crear tabla rutas si no existe
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS rutas (
+        id SERIAL PRIMARY KEY,
+        nombre VARCHAR(255) NOT NULL,
+        descripcion TEXT,
+        color VARCHAR(7) DEFAULT '#0066CC',
+        numero_ruta VARCHAR(50) NOT NULL UNIQUE,
+        empresa VARCHAR(255),
+        tipo VARCHAR(50) DEFAULT 'Bus',
+        tarifa DECIMAL(10, 2) DEFAULT 0.25,
+        horario_inicio TIME DEFAULT '05:00:00',
+        horario_fin TIME DEFAULT '21:00:00',
+        frecuencia_minutos INTEGER DEFAULT 15,
+        activa BOOLEAN DEFAULT TRUE,
+        geometry TEXT,
+        longitud_km DECIMAL(10, 2),
+        fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    
+    // Crear tabla paradas si no existe
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS paradas (
+        id SERIAL PRIMARY KEY,
+        codigo VARCHAR(50) UNIQUE,
+        nombre VARCHAR(255) NOT NULL,
+        descripcion TEXT,
+        direccion VARCHAR(255),
+        latitud DECIMAL(10, 8) NOT NULL,
+        longitud DECIMAL(11, 8) NOT NULL,
+        zona VARCHAR(100),
+        tipo VARCHAR(50) DEFAULT 'Regular',
+        tiene_techo BOOLEAN DEFAULT FALSE,
+        tiene_asientos BOOLEAN DEFAULT FALSE,
+        accesible BOOLEAN DEFAULT FALSE,
+        activa BOOLEAN DEFAULT TRUE,
+        fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    
+    // Crear tabla parada_ruta si no existe
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS parada_ruta (
+        id SERIAL PRIMARY KEY,
+        id_parada INTEGER REFERENCES paradas(id) ON DELETE CASCADE,
+        id_ruta INTEGER REFERENCES rutas(id) ON DELETE CASCADE,
+        orden INTEGER NOT NULL,
+        direccion VARCHAR(50) DEFAULT 'ida',
+        distancia_km DECIMAL(10, 2),
+        tiempo_estimado_minutos INTEGER,
+        UNIQUE(id_parada, id_ruta, direccion, orden)
+      );
+    `);
+    
+    // Crear tabla historial_busquedas si no existe
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS historial_busquedas (
+        id SERIAL PRIMARY KEY,
+        id_usuario INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+        ruta VARCHAR(200),
+        numero_ruta VARCHAR(50),
+        parada VARCHAR(200),
+        fecha_busqueda TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        latitud_origen DECIMAL(10, 8),
+        longitud_origen DECIMAL(11, 8),
+        latitud_destino DECIMAL(10, 8),
+        longitud_destino DECIMAL(11, 8),
+        tipo_busqueda VARCHAR(50) DEFAULT 'general',
+        metadata JSONB DEFAULT '{}'::jsonb
+      );
+    `);
+    
+    // Crear índices para rutas
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_rutas_numero ON rutas(numero_ruta);
+      CREATE INDEX IF NOT EXISTS idx_rutas_activa ON rutas(activa) WHERE activa = TRUE;
+    `);
+    
+    // Crear índices para paradas
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_paradas_codigo ON paradas(codigo);
+      CREATE INDEX IF NOT EXISTS idx_paradas_activa ON paradas(activa) WHERE activa = TRUE;
+    `);
+    
+    // Crear índices para parada_ruta
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_parada_ruta_parada ON parada_ruta(id_parada);
+      CREATE INDEX IF NOT EXISTS idx_parada_ruta_ruta ON parada_ruta(id_ruta);
+    `);
+    
+    console.log('✅ Esquema completo verificado/creado');
     return true;
   } catch (err) {
     console.error('❌ Error al crear esquema:', err);

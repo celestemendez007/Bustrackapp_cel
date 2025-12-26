@@ -1580,7 +1580,12 @@ app.put("/admin/rutas/:id", authenticateToken, requireAdmin, async (req, res) =>
     if (horario_inicio !== undefined) { updates.push(`horario_inicio = $${paramCount}`); values.push(horario_inicio); paramCount++; }
     if (horario_fin !== undefined) { updates.push(`horario_fin = $${paramCount}`); values.push(horario_fin); paramCount++; }
     if (frecuencia_minutos !== undefined) { updates.push(`frecuencia_minutos = $${paramCount}`); values.push(frecuencia_minutos); paramCount++; }
-    if (activa !== undefined) { updates.push(`activa = $${paramCount}`); values.push(activa ? 1 : 0); paramCount++; }
+    if (activa !== undefined) { 
+      // En PostgreSQL, activa es BOOLEAN, usar true/false directamente
+      updates.push(`activa = $${paramCount}`); 
+      values.push(activa === true || activa === 1 || activa === 'true'); 
+      paramCount++; 
+    }
     if (geometry !== undefined) {
       if (geometry && geometry.trim()) {
         try {
@@ -1637,7 +1642,7 @@ app.put("/admin/rutas/:id", authenticateToken, requireAdmin, async (req, res) =>
             } else {
               // Crear nueva parada
               const newStop = await pool.query(
-                "INSERT INTO paradas (nombre, latitud, longitud, direccion, activa, tipo) VALUES ($1, $2, $3, $4, 1, 'Virtual') RETURNING id",
+                `INSERT INTO paradas (nombre, latitud, longitud, direccion, activa, tipo) VALUES ($1, $2, $3, $4, ${useCloud ? 'TRUE' : '1'}, 'Virtual') RETURNING id`,
                 [stop.nombre || stop.address || 'Parada', stop.lat, stop.lng, stop.address || '']
               );
               stopId = newStop.rows[0].id;
@@ -1671,7 +1676,15 @@ app.put("/admin/rutas/:id", authenticateToken, requireAdmin, async (req, res) =>
     res.json({ success: true, data: result.rows[0] });
   } catch (err) {
     console.error("Error al actualizar ruta:", err);
-    res.status(500).json({ success: false, message: "Error al actualizar ruta" });
+    console.error("Stack trace:", err.stack);
+    const errorMessage = process.env.NODE_ENV === 'development' 
+      ? `Error al actualizar ruta: ${err.message}` 
+      : "Error al actualizar ruta";
+    res.status(500).json({ 
+      success: false, 
+      message: errorMessage,
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 

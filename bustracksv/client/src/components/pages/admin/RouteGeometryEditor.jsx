@@ -23,17 +23,50 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Inicializar
+  // Inicializar - Mejorar parsing de geometría
   useEffect(() => {
     if (value) {
       try {
         const parsed = typeof value === 'string' ? JSON.parse(value) : value;
-        if (parsed?.ida) setPathIda(parsed.ida);
-        if (parsed?.regreso) setPathRegreso(parsed.regreso);
-        if (Array.isArray(parsed)) setPathIda(parsed);
+        
+        // Formato 1: { ida: [...], regreso: [...] }
+        if (parsed?.ida) {
+          setPathIda(Array.isArray(parsed.ida) ? parsed.ida : []);
+        }
+        if (parsed?.regreso) {
+          setPathRegreso(Array.isArray(parsed.regreso) ? parsed.regreso : []);
+        }
+        
+        // Formato 2: Array simple (asumimos que es ida)
+        if (Array.isArray(parsed) && !parsed.ida && !parsed.regreso) {
+          setPathIda(parsed);
+        }
+        
+        // Formato 3: String JSON de array simple
+        if (typeof parsed === 'string' && parsed.trim().startsWith('[')) {
+          const arr = JSON.parse(parsed);
+          if (Array.isArray(arr)) {
+            setPathIda(arr);
+          }
+        }
       } catch (e) {
         console.error("Error parseando geometry inicial", e);
+        // Si falla el parsing, intentar como array directo
+        if (typeof value === 'string' && value.trim()) {
+          try {
+            const directParse = JSON.parse(value);
+            if (Array.isArray(directParse)) {
+              setPathIda(directParse);
+            }
+          } catch (e2) {
+            console.error("Error en parsing directo:", e2);
+          }
+        }
       }
+    } else {
+      // Si no hay value, limpiar los paths
+      setPathIda([]);
+      setPathRegreso([]);
     }
   }, [value]);
 
@@ -438,7 +471,18 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
         {/* Trazado Regreso - ROJO */}
         {pathRegreso.length > 0 && (
           <Polyline
-            path={pathRegreso}
+            path={pathRegreso.map(p => {
+              // Normalizar formato de puntos: aceptar tanto {lat, lng} como [lat, lng]
+              if (Array.isArray(p)) {
+                return { lat: p[0], lng: p[1] };
+              } else if (typeof p === 'object' && p !== null) {
+                return {
+                  lat: typeof p.lat === 'number' ? p.lat : parseFloat(p.lat || p.latitud || 0),
+                  lng: typeof p.lng === 'number' ? p.lng : parseFloat(p.lng || p.longitud || 0)
+                };
+              }
+              return p;
+            }).filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng))}
             options={{
               strokeColor: '#ef4444', // red-500
               strokeOpacity: 0.8,

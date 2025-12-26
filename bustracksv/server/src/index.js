@@ -941,7 +941,7 @@ app.get("/api/paradas-cercanas", async (req, res) => {
   try {
     const latNum = parseFloat(lat);
     const lngNum = parseFloat(lng);
-    const result = await pool.query("SELECT * FROM paradas WHERE activa = 1");
+    const result = await pool.query(`SELECT * FROM paradas WHERE activa = ${activaTrue}`);
 
     // Filtro simple por distancia (Haversine)
     const filtered = result.rows.map(p => {
@@ -1026,7 +1026,7 @@ app.get("/api/rutas-cercanas", async (req, res) => {
   try {
     const latNum = parseFloat(lat);
     const lngNum = parseFloat(lng);
-    const result = await pool.query("SELECT * FROM paradas WHERE activa = 1");
+    const result = await pool.query(`SELECT * FROM paradas WHERE activa = ${activaTrue}`);
     const nearbyStops = result.rows.map(p => {
       const R = 6371000;
       const dLat = (parseFloat(p.latitud) - latNum) * Math.PI / 180;
@@ -1044,7 +1044,7 @@ app.get("/api/rutas-cercanas", async (req, res) => {
     const rutasResult = await pool.query(`
        SELECT DISTINCT r.* FROM rutas r
        JOIN parada_ruta pr ON r.id = pr.id_ruta
-       WHERE pr.id_parada IN (${nearbyStops.join(',')}) AND r.activa = 1
+       WHERE pr.id_parada IN (${nearbyStops.join(',')}) AND r.activa = ${activaTrue}
        LIMIT ${parseInt(limite)}
      `);
     res.json({ success: true, rutas: rutasResult.rows });
@@ -1147,7 +1147,7 @@ app.post("/api/buscar-rutas", async (req, res) => {
       JOIN parada_ruta pr2 ON r.id = pr2.id_ruta
       JOIN paradas p1 ON pr1.id_parada = p1.id
       JOIN paradas p2 ON pr2.id_parada = p2.id
-      WHERE r.activa = 1
+      WHERE r.activa = ${activaTrue}
         AND pr1.id_parada = $1
         AND pr2.id_parada = $2
         AND pr1.orden < pr2.orden

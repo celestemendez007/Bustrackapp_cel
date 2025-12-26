@@ -885,13 +885,13 @@ app.get("/api/rutas/:id/paradas", async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
-        p.id, p.codigo, p.nombre, p.descripcion, p.direccion, 
+        p.id, p.codigo, p.nombre, p.descripcion, p.direccion as parada_direccion, 
         p.latitud, p.longitud, p.zona, p.tipo,
-        pr.orden, pr.tiempo_estimado_minutos
+        pr.orden, pr.tiempo_estimado_minutos, pr.direccion
       FROM paradas p
       JOIN parada_ruta pr ON p.id = pr.id_parada
       WHERE pr.id_ruta = $1 AND p.activa = ${activaTrue}
-      ORDER BY pr.orden ASC
+      ORDER BY pr.direccion, pr.orden ASC
     `, [id]);
 
     res.json(result.rows.map(p => ({

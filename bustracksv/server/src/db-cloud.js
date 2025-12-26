@@ -230,9 +230,6 @@ export const getDatabaseStats = async () => {
   }
 };
 
-// Exportar funciones adicionales
-export { ensureSchema };
-
 // Exportar por defecto para compatibilidad
 export default pool;
 

@@ -279,6 +279,58 @@ app.get("/setup/list-admins", async (req, res) => {
   }
 });
 
+// Endpoint temporal para resetear contraseña de un usuario admin (solo para setup inicial)
+app.post("/setup/reset-admin-password", async (req, res) => {
+  try {
+    const { usuario } = req.body;
+    
+    if (!usuario) {
+      return res.status(400).json({
+        success: false,
+        message: "Se requiere el nombre de usuario"
+      });
+    }
+
+    // Verificar que el usuario existe y es admin
+    const userResult = await pool.query(
+      "SELECT id, usuario, rol FROM usuarios WHERE usuario = $1 AND rol IN ('admin', 'gobierno')",
+      [usuario]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Usuario admin no encontrado"
+      });
+    }
+
+    // Nueva contraseña: Gobierno2025!
+    const newPassword = 'Gobierno2025!';
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Actualizar contraseña
+    await pool.query(
+      "UPDATE usuarios SET password = $1 WHERE id = $2",
+      [hashedPassword, userResult.rows[0].id]
+    );
+
+    return res.json({
+      success: true,
+      message: "Contraseña reseteada exitosamente",
+      usuario: userResult.rows[0].usuario,
+      password: newPassword,
+      rol: userResult.rows[0].rol
+    });
+  } catch (error) {
+    console.error("Error al resetear contraseña:", error);
+    return res.status(500).json({ 
+      success: false,
+      message: "Error al resetear contraseña",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Endpoint temporal para crear el primer usuario admin (solo si no existe ningún admin)
 app.post("/setup/admin", async (req, res) => {
   try {

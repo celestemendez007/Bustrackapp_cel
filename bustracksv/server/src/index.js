@@ -898,7 +898,8 @@ app.get("/api/rutas/:id/paradas", async (req, res) => {
       ...p,
       latitud: parseFloat(p.latitud),
       longitud: parseFloat(p.longitud),
-      orden: parseInt(p.orden)
+      orden: parseInt(p.orden),
+      direccion: p.direccion || 'ida' // direccion de parada_ruta (ida/regreso)
     })));
   } catch (err) {
     console.error(`Error al obtener paradas de ruta ${id}:`, err);

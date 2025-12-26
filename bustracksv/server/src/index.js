@@ -890,7 +890,7 @@ app.get("/api/rutas/:id/paradas", async (req, res) => {
         pr.orden, pr.tiempo_estimado_minutos
       FROM paradas p
       JOIN parada_ruta pr ON p.id = pr.id_parada
-      WHERE pr.id_ruta = $1 AND p.activa = 1
+      WHERE pr.id_ruta = $1 AND p.activa = ${activaTrue}
       ORDER BY pr.orden ASC
     `, [id]);
 

@@ -152,17 +152,15 @@ export default function AdminDashboardPage() {
           
           // Si hay geometría guardada en item.geometry, usarla, sino construir desde paradas
           let geometry = item.geometry;
-          if (!geometry && (pathIda.length > 0 || pathRegreso.length > 0)) {
+          if ((!geometry || geometry === '' || geometry === 'null') && (pathIda.length > 0 || pathRegreso.length > 0)) {
             geometry = JSON.stringify({ ida: pathIda, regreso: pathRegreso });
           }
           
           // Actualizar formData con la geometría
-          if (geometry) {
-            setFormData(prev => ({
-              ...prev,
-              geometry: geometry
-            }));
-          }
+          setFormData(prev => ({
+            ...prev,
+            geometry: geometry || JSON.stringify({ ida: pathIda, regreso: pathRegreso })
+          }));
         }
       } catch (err) {
         console.error("Error cargando paradas de ruta:", err);

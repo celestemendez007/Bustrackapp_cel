@@ -26,7 +26,7 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
   // Inicializar - Mejorar parsing de geometría y también construir desde paradas
   useEffect(() => {
     // Si hay paradas (stops), construir geometría desde ellas
-    if (stops && stops.length > 0 && (!value || value === '' || value === '{}' || value === 'null')) {
+    if (stops && stops.length > 0) {
       const paradasIda = stops
         .filter(p => p.direccion === 'ida' || !p.direccion)
         .sort((a, b) => (a.orden || 0) - (b.orden || 0));
@@ -44,11 +44,14 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
         lng: typeof p.longitud === 'number' ? p.longitud : parseFloat(p.longitud)
       })).filter(p => !isNaN(p.lat) && !isNaN(p.lng));
       
-      if (pathIdaFromStops.length > 0) {
-        setPathIda(pathIdaFromStops);
-      }
-      if (pathRegresoFromStops.length > 0) {
-        setPathRegreso(pathRegresoFromStops);
+      // Solo usar paradas si no hay value o value está vacío
+      if (!value || value === '' || value === '{}' || value === 'null' || value === null) {
+        if (pathIdaFromStops.length > 0) {
+          setPathIda(pathIdaFromStops);
+        }
+        if (pathRegresoFromStops.length > 0) {
+          setPathRegreso(pathRegresoFromStops);
+        }
       }
     }
     

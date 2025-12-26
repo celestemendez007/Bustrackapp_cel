@@ -891,7 +891,7 @@ app.get("/api/rutas/:id/paradas", async (req, res) => {
       FROM paradas p
       JOIN parada_ruta pr ON p.id = pr.id_parada
       WHERE pr.id_ruta = $1 AND p.activa = ${activaTrue}
-      ORDER BY pr.direccion, pr.orden ASC
+      ORDER BY COALESCE(pr.direccion, 'ida'), pr.orden ASC
     `, [id]);
 
     res.json(result.rows.map(p => ({

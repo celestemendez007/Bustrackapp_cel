@@ -82,7 +82,10 @@ class GraphRouteService {
         console.log("Construyendo grafo de rutas...");
         const client = await pool.connect();
         try {
-            const rutasRes = await client.query('SELECT id, numero_ruta, nombre, color, tarifa FROM rutas WHERE activa = 1');
+            // Helper para comparaciones booleanas según la base de datos
+            const useCloud = !!(process.env.DATABASE_URL || process.env.DB_HOST);
+            const activaTrue = useCloud ? 'TRUE' : '1';
+            const rutasRes = await client.query(`SELECT id, numero_ruta, nombre, color, tarifa FROM rutas WHERE activa = ${activaTrue}`);
             this.rutasInfo = {};
             rutasRes.rows.forEach(r => this.rutasInfo[r.id] = r);
 

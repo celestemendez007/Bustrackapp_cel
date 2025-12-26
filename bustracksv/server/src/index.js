@@ -28,6 +28,10 @@ import jwt from "jsonwebtoken";
 // Detectar si usar cloud o local (prioridad: DATABASE_URL > DB_HOST > local)
 const useCloud = !!(process.env.DATABASE_URL || process.env.DB_HOST);
 
+// Helper para comparaciones booleanas según la base de datos
+const activaTrue = useCloud ? 'TRUE' : '1';
+const activaFalse = useCloud ? 'FALSE' : '0';
+
 // Importar base de datos según el modo (PostgreSQL para cloud, SQLite para local)
 let pool, testConnection, ensureIndexes = null;
 
@@ -744,7 +748,7 @@ app.get("/api/rutas", async (req, res) => {
     const result = await pool.query(`
       SELECT id, nombre, descripcion, color, numero_ruta, empresa, tipo, tarifa, geometry
       FROM rutas
-      WHERE activa = 1
+      WHERE activa = ${activaTrue}
       ORDER BY numero_ruta
     `);
 
@@ -910,7 +914,7 @@ app.get("/api/paradas", async (req, res) => {
     let query = `
       SELECT id, codigo, nombre, descripcion, direccion, latitud, longitud, zona, tipo
       FROM paradas
-      WHERE activa = 1
+      WHERE activa = ${activaTrue}
     `;
     const params = [];
 
@@ -2038,7 +2042,7 @@ app.get("/api/routes", async (req, res) => {
     const result = await pool.query(`
       SELECT id, nombre, descripcion, color, numero_ruta, empresa, tipo, tarifa, geometry
       FROM rutas
-      WHERE activa = 1
+      WHERE activa = ${activaTrue}
       ORDER BY numero_ruta
     `);
 

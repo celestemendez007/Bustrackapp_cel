@@ -26,25 +26,35 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
 
   // Cargar puntos guardados de la ruta cuando se edita (prioridad ALTA)
   useEffect(() => {
+    console.log('🔍 RouteGeometryEditor useEffect ejecutado - rutaId:', rutaId, 'value:', value);
+    
     if (rutaId) {
+      console.log('✅ rutaId existe, cargando puntos desde DB...');
       const loadRoutePoints = async () => {
         try {
-          console.log('Cargando puntos de ruta desde DB, rutaId:', rutaId);
+          console.log('📡 Llamando a getRoutePuntos con rutaId:', rutaId);
           const response = await adminService.getRoutePuntos(rutaId);
+          console.log('📥 Respuesta recibida:', response);
+          
           if (response.success && response.data) {
             const puntosIda = response.data.ida || [];
             const puntosRegreso = response.data.regreso || [];
             
-            console.log('Puntos cargados desde DB - Ida:', puntosIda.length, 'Regreso:', puntosRegreso.length);
+            console.log('✅ Puntos cargados desde DB - Ida:', puntosIda.length, 'Regreso:', puntosRegreso.length);
+            console.log('📍 Primer punto Ida:', puntosIda[0]);
+            console.log('📍 Primer punto Regreso:', puntosRegreso[0]);
             
             // SIEMPRE cargar puntos desde la base de datos (incluso si están vacíos)
             // Esto asegura que siempre se muestren las rutas guardadas
             setPathIda(puntosIda);
             setPathRegreso(puntosRegreso);
             loadedFromDbRef.current = true; // Marcar que ya cargamos desde DB
+            console.log('✅ Estados pathIda y pathRegreso actualizados');
+          } else {
+            console.warn('⚠️ Respuesta sin éxito o sin data:', response);
           }
         } catch (err) {
-          console.error("Error cargando puntos de ruta:", err);
+          console.error("❌ Error cargando puntos de ruta:", err);
           // Si hay error, asegurar arrays vacíos
           setPathIda([]);
           setPathRegreso([]);
@@ -52,6 +62,7 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
       };
       loadRoutePoints();
     } else if (value && !loadedFromDbRef.current) {
+      console.log('⚠️ No hay rutaId, usando value prop');
       // Solo usar value si no hay rutaId y no hemos cargado desde DB
       try {
         const parsed = typeof value === 'string' ? JSON.parse(value) : value;
@@ -61,6 +72,8 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
       } catch (e) {
         console.error("Error parseando geometry inicial", e);
       }
+    } else {
+      console.log('ℹ️ No hay rutaId ni value, no se cargan puntos');
     }
   }, [rutaId, value]);
 
@@ -373,32 +386,53 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
 
 
   const handleUpdate = async () => {
+    console.log('💾 handleUpdate ejecutado');
+    console.log('📍 pathIda actual:', pathIda.length, 'puntos');
+    console.log('📍 pathRegreso actual:', pathRegreso.length, 'puntos');
+    
     const finalGeometry = { ida: pathIda, regreso: pathRegreso };
     const jsonString = JSON.stringify(finalGeometry);
     const stopData = { ida: markersIda, regreso: markersRegreso };
+    
     if (onChange) onChange(jsonString);
     if (onSave) {
+      console.log('📤 Llamando a onSave...');
       await onSave(jsonString, stopData);
+      console.log('✅ onSave completado');
+      
       // Recargar puntos DESPUÉS de guardar para asegurar que SIEMPRE se muestren
       if (rutaId) {
         try {
+          console.log('⏳ Esperando 1 segundo antes de recargar puntos...');
           // Pequeño delay para asegurar que el backend haya guardado
           await new Promise(resolve => setTimeout(resolve, 1000));
-          console.log('Recargando puntos después de guardar, rutaId:', rutaId);
+          console.log('🔄 Recargando puntos después de guardar, rutaId:', rutaId);
           const response = await adminService.getRoutePuntos(rutaId);
+          console.log('📥 Respuesta al recargar:', response);
+          
           if (response.success && response.data) {
             const puntosIda = response.data.ida || [];
             const puntosRegreso = response.data.regreso || [];
-            console.log('Puntos recargados después de guardar - Ida:', puntosIda.length, 'Regreso:', puntosRegreso.length);
+            console.log('✅ Puntos recargados después de guardar - Ida:', puntosIda.length, 'Regreso:', puntosRegreso.length);
+            console.log('📍 Primer punto Ida recargado:', puntosIda[0]);
+            console.log('📍 Primer punto Regreso recargado:', puntosRegreso[0]);
+            
             // SIEMPRE actualizar las rutas, incluso si están vacías
             setPathIda(puntosIda);
             setPathRegreso(puntosRegreso);
             loadedFromDbRef.current = true;
+            console.log('✅ Estados actualizados después de recargar');
+          } else {
+            console.warn('⚠️ Respuesta sin éxito al recargar:', response);
           }
         } catch (err) {
-          console.error("Error recargando puntos después de guardar:", err);
+          console.error("❌ Error recargando puntos después de guardar:", err);
         }
+      } else {
+        console.warn('⚠️ No hay rutaId, no se recargan puntos');
       }
+    } else {
+      console.warn('⚠️ No hay onSave handler');
     }
   };
 

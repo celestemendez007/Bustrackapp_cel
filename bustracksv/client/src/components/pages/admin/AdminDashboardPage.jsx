@@ -316,7 +316,9 @@ export default function AdminDashboardPage() {
           }
         }
 
-        loadData();
+        // NO llamar a loadData() para no cerrar el modal
+        // Solo actualizar la lista de rutas en segundo plano sin afectar el modal
+        // El RouteGeometryEditor recargará los puntos automáticamente
       } else {
         alert("❌ Error al guardar: " + (result.message || "Error desconocido"));
       }

@@ -33,12 +33,16 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
             const puntosIda = response.data.ida || [];
             const puntosRegreso = response.data.regreso || [];
             
-            // Cargar puntos desde la base de datos (prioridad sobre value)
+            // SIEMPRE cargar puntos desde la base de datos (incluso si están vacíos)
+            // Esto asegura que siempre se muestren las rutas guardadas
             setPathIda(puntosIda);
             setPathRegreso(puntosRegreso);
           }
         } catch (err) {
           console.error("Error cargando puntos de ruta:", err);
+          // Si hay error, asegurar arrays vacíos
+          setPathIda([]);
+          setPathRegreso([]);
         }
       };
       loadRoutePoints();
@@ -370,13 +374,16 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
     if (onChange) onChange(jsonString);
     if (onSave) {
       await onSave(jsonString, stopData);
-      // Recargar puntos después de guardar para asegurar que se muestren
+      // Recargar puntos DESPUÉS de guardar para asegurar que SIEMPRE se muestren
       if (rutaId) {
         try {
+          // Pequeño delay para asegurar que el backend haya guardado
+          await new Promise(resolve => setTimeout(resolve, 500));
           const response = await adminService.getRoutePuntos(rutaId);
           if (response.success && response.data) {
             const puntosIda = response.data.ida || [];
             const puntosRegreso = response.data.regreso || [];
+            // SIEMPRE actualizar las rutas, incluso si están vacías
             setPathIda(puntosIda);
             setPathRegreso(puntosRegreso);
           }

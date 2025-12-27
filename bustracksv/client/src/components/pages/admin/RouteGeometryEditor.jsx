@@ -44,12 +44,16 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
             console.log('📍 Primer punto Ida:', puntosIda[0]);
             console.log('📍 Primer punto Regreso:', puntosRegreso[0]);
             
-            // SIEMPRE cargar puntos desde la base de datos (incluso si están vacíos)
-            // Esto asegura que siempre se muestren las rutas guardadas
-            setPathIda(puntosIda);
-            setPathRegreso(puntosRegreso);
-            loadedFromDbRef.current = true; // Marcar que ya cargamos desde DB
-            console.log('✅ Estados pathIda y pathRegreso actualizados');
+            // Solo cargar puntos desde DB si hay puntos guardados O si no hay puntos en el estado local
+            // Esto evita sobrescribir puntos trazados localmente si la DB está vacía
+            if (puntosIda.length > 0 || puntosRegreso.length > 0 || (pathIda.length === 0 && pathRegreso.length === 0)) {
+              setPathIda(puntosIda);
+              setPathRegreso(puntosRegreso);
+              loadedFromDbRef.current = true; // Marcar que ya cargamos desde DB
+              console.log('✅ Estados pathIda y pathRegreso actualizados desde DB');
+            } else {
+              console.log('⚠️ DB vacía pero hay puntos locales, manteniendo puntos locales');
+            }
           } else {
             console.warn('⚠️ Respuesta sin éxito o sin data:', response);
           }

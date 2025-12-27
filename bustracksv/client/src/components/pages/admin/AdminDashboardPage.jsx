@@ -272,19 +272,28 @@ export default function AdminDashboardPage() {
     }
 
     try {
+      console.log('🔧 handleQuickSave ejecutado');
+      console.log('📄 geometryJson recibido:', geometryJson);
+      
       // Parsear la geometría para enviarla como puntos crudos al backend (para puntos_ruta)
       let puntosIda = [];
       let puntosRegreso = [];
       try {
         const parsed = JSON.parse(geometryJson);
+        console.log('📦 geometryJson parseado:', parsed);
         if (parsed) {
           // El editor devuelve { ida: [...], regreso: [...] }
           if (Array.isArray(parsed.ida)) puntosIda = parsed.ida;
           if (Array.isArray(parsed.regreso)) puntosRegreso = parsed.regreso;
         }
       } catch (e) {
-        console.error("Error parseando geometry para guardar:", e);
+        console.error("❌ Error parseando geometry para guardar:", e);
       }
+
+      console.log('📍 puntosIda a guardar:', puntosIda.length);
+      console.log('📍 puntosRegreso a guardar:', puntosRegreso.length);
+      console.log('📍 Primer punto ida:', puntosIda[0]);
+      console.log('📍 Primer punto regreso:', puntosRegreso[0]);
 
       const payload = {
         ...formData,
@@ -298,10 +307,17 @@ export default function AdminDashboardPage() {
       // Eliminar geometry del payload si existe
       delete payload.geometry;
 
+      console.log('📤 Payload a enviar:', {
+        ...payload,
+        puntos_ida: `[${puntosIda.length} puntos]`,
+        puntos_regreso: `[${puntosRegreso.length} puntos]`
+      });
+
       // Actualizar estado local
       setFormData(payload);
 
       const result = await adminService.updateRuta(editingItem.id, payload);
+      console.log('📥 Resultado del updateRuta:', result);
 
       if (result.success) {
         alert("✅ Ruta actualizada y guardada correctamente");

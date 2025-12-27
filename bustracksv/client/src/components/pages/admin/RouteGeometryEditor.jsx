@@ -421,11 +421,17 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
             console.log('📍 Primer punto Ida recargado:', puntosIda[0]);
             console.log('📍 Primer punto Regreso recargado:', puntosRegreso[0]);
             
-            // SIEMPRE actualizar las rutas, incluso si están vacías
-            setPathIda(puntosIda);
-            setPathRegreso(puntosRegreso);
-            loadedFromDbRef.current = true;
-            console.log('✅ Estados actualizados después de recargar');
+            // SIEMPRE actualizar después de guardar (incluso si están vacíos) porque acabamos de guardar
+            // Si están vacíos después de guardar, significa que hubo un problema al guardar
+            if (puntosIda.length > 0 || puntosRegreso.length > 0) {
+              setPathIda(puntosIda);
+              setPathRegreso(puntosRegreso);
+              loadedFromDbRef.current = true;
+              console.log('✅ Estados actualizados después de recargar');
+            } else {
+              console.warn('⚠️ ADVERTENCIA: Después de guardar, la DB está vacía. Los puntos no se guardaron correctamente.');
+              // NO actualizar los estados para mantener los puntos locales visibles
+            }
           } else {
             console.warn('⚠️ Respuesta sin éxito al recargar:', response);
           }

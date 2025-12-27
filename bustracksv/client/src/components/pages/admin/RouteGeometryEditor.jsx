@@ -12,6 +12,7 @@ const containerStyle = {
 export default function RouteGeometryEditor({ value, onChange, onSave, stops = [], previewStop = null, rutaId = null }) {
   const { isLoaded, loadError } = useGoogleMaps();
   const mapRef = useRef(null);
+  const loadedFromDbRef = useRef(false); // Flag para saber si ya cargamos desde DB
 
   // Estados
   const [textoIda, setTextoIda] = useState('');
@@ -23,20 +24,24 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Cargar puntos guardados de la ruta cuando se edita (prioridad)
+  // Cargar puntos guardados de la ruta cuando se edita (prioridad ALTA)
   useEffect(() => {
     if (rutaId) {
       const loadRoutePoints = async () => {
         try {
+          console.log('Cargando puntos de ruta desde DB, rutaId:', rutaId);
           const response = await adminService.getRoutePuntos(rutaId);
           if (response.success && response.data) {
             const puntosIda = response.data.ida || [];
             const puntosRegreso = response.data.regreso || [];
             
+            console.log('Puntos cargados desde DB - Ida:', puntosIda.length, 'Regreso:', puntosRegreso.length);
+            
             // SIEMPRE cargar puntos desde la base de datos (incluso si están vacíos)
             // Esto asegura que siempre se muestren las rutas guardadas
             setPathIda(puntosIda);
             setPathRegreso(puntosRegreso);
+            loadedFromDbRef.current = true; // Marcar que ya cargamos desde DB
           }
         } catch (err) {
           console.error("Error cargando puntos de ruta:", err);
@@ -46,8 +51,8 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
         }
       };
       loadRoutePoints();
-    } else if (value) {
-      // Solo usar value si no hay rutaId (nueva ruta o fallback)
+    } else if (value && !loadedFromDbRef.current) {
+      // Solo usar value si no hay rutaId y no hemos cargado desde DB
       try {
         const parsed = typeof value === 'string' ? JSON.parse(value) : value;
         if (parsed?.ida) setPathIda(parsed.ida);
@@ -378,14 +383,17 @@ export default function RouteGeometryEditor({ value, onChange, onSave, stops = [
       if (rutaId) {
         try {
           // Pequeño delay para asegurar que el backend haya guardado
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          console.log('Recargando puntos después de guardar, rutaId:', rutaId);
           const response = await adminService.getRoutePuntos(rutaId);
           if (response.success && response.data) {
             const puntosIda = response.data.ida || [];
             const puntosRegreso = response.data.regreso || [];
+            console.log('Puntos recargados después de guardar - Ida:', puntosIda.length, 'Regreso:', puntosRegreso.length);
             // SIEMPRE actualizar las rutas, incluso si están vacías
             setPathIda(puntosIda);
             setPathRegreso(puntosRegreso);
+            loadedFromDbRef.current = true;
           }
         } catch (err) {
           console.error("Error recargando puntos después de guardar:", err);
